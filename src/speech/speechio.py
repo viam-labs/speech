@@ -4,6 +4,7 @@ import time
 import os
 import re
 import json
+import asyncio
 import hashlib
 from typing_extensions import Self
 
@@ -95,12 +96,34 @@ class SpeechIOService(SpeechService, Reconfigurable):
         
         completion = openai.ChatCompletion.create(model="gpt-3.5-turbo", max_tokens=1024, messages=[{"role": "user", "content": text}])
         completion = completion.choices[0].message.content
-        completion = re.sub('[^0-9a-zA-Z.!?,:/ ]+', '', completion)
+        completion = re.sub('[^0-9a-zA-Z.!?,:/ ]+', '', completion).lower()
+        completion = completion.replace("as an ai language model", "")
         await self.say(completion)
         return completion
         
+    def listen_callback(self, recognizer, audio):
+        try:
+            # for testing purposes, we're just using the default API key
+            # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
+            # instead of `r.recognize_google(audio)`
+            transcript = recognizer.recognize_google(audio,show_all=True)
+            if type(transcript) is dict and transcript.get("alternative"):
+                heard = transcript["alternative"][0]["transcript"]
+                LOGGER.info("speechio heard " + heard)
+                if re.search(".*" + self.listen_trigger_say, heard):
+                    to_say = re.sub(".*" + self.listen_trigger_say + "\s+",  '', heard)
+                    asyncio.run(self.say(to_say))
+                elif re.search(".*" + self.listen_trigger_completion, heard):
+                    to_say = re.sub(".*" + self.listen_trigger_completion + "\s+",  '', heard)
+                    asyncio.run(self.completion(to_say))
+        except sr.UnknownValueError:
+            LOGGER.warn("Google Speech Recognition could not understand audio")
+        except sr.RequestError as e:
+            LOGGER.warn("Could not request results from Google Speech Recognition service; {0}".format(e))
+
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
         self.speech_provider = config.attributes.fields["speech_provider"].string_value or 'google'
+
         self.speech_provider_key = config.attributes.fields["speech_provider_key"].string_value or ''
         self.speech_voice = config.attributes.fields["speech_voice"].string_value or 'Josh'
         self.completion_provider = config.attributes.fields["completion_provider"].string_value or 'openaigpt35turbo'
@@ -108,8 +131,8 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.completion_provider_key = config.attributes.fields["completion_provider_key"].string_value or ''
         self.listen = config.attributes.fields["listen"].bool_value or False
         self.listen_trigger_say = config.attributes.fields["listen_trigger_say"].string_value or "robot say"
-        self.listen_trigger_completion = config.attributes.fields["listen_trigger_completion"].string_value or "hey Robot"
-        self.listen_trigger_command = config.attributes.fields["listen_trigger_command"].string_value or "robot now"
+        self.listen_trigger_completion = config.attributes.fields["listen_trigger_completion"].string_value or "hey robot"
+        self.listen_trigger_command = config.attributes.fields["listen_trigger_command"].string_value or "robot can you"
         self.listen_command_buffer_length = config.attributes.fields["listen_command_buffer_length"].number_value or 10
 
         if self.speech_provider == 'elevenlabs' and self.speech_provider_key != '':
@@ -121,5 +144,15 @@ class SpeechIOService(SpeechService, Reconfigurable):
             openai.organization = self.completion_provider_org
         if self.completion_provider_key:
             openai.api_key = self.completion_provider_key
+
+        # set up listening if desired
+        if self.listen == True:
+            r = sr.Recognizer()
+            r.energy_threshold = 1568 
+            r.dynamic_energy_threshold = True
+            m = sr.Microphone()
+            with m as source:
+                r.adjust_for_ambient_noise(source)
+            r.listen_in_background(m, self.listen_callback)
 
         return self

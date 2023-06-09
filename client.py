@@ -24,16 +24,18 @@ async def main():
     print(robot.resource_names)
 
     speech = SpeechService.from_robot(robot, name="speechio")
-    
+
     text = await speech.say("Good day, friend!")
-    print(f"I said '{text}'")
+    print(f"The robot said '{text}'")
 
+    # note: this will fail unless you have a completion provider configured
     text = await speech.completion("Give me a quote that a companion helper robot might say if they were saying 'Good day, friend!'")
-    print(f"I said '{text}'")
+    print(f"The robot said '{text}'")
 
+    # note: this will fail unless you have a completion provider configured
     text = await speech.completion("Give me a quote that a companion helper robot might say regarding this robots resources: " 
                                    + str(robot.resource_names) + " using documentation at https://docs.viam.com as reference")
-    print(f"I said '{text}'")
+    print(f"The robot said '{text}'")
 
     await robot.close()
 
