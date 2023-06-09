@@ -56,22 +56,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
         speechio = cls(config.name)
-        speechio.speech_provider = config.attributes.fields["speech_provider"].string_value or 'google'
-        speechio.speech_provider_key = config.attributes.fields["speech_provider_key"].string_value or ''
-        speechio.speech_voice = config.attributes.fields["speech_voice"].string_value or 'Josh'
-        speechio.completion_provider = config.attributes.fields["completion_provider"].string_value or 'openaigpt35turbo'
-        speechio.completion_provider_org = config.attributes.fields["completion_provider_org"].string_value or ''
-        speechio.completion_provider_key = config.attributes.fields["completion_provider_key"].string_value or ''
-        speechio.listen = config.attributes.fields["listen"].bool_value or False
-        speechio.listen_trigger_say = config.attributes.fields["listen_trigger_say"].string_value or "robot say"
-        speechio.listen_trigger_completion = config.attributes.fields["listen_trigger_completion"].string_value or "hey Robot"
-        speechio.listen_trigger_command = config.attributes.fields["listen_trigger_command"].string_value or "robot now"
-        speechio.listen_command_buffer_length = config.attributes.fields["listen_command_buffer_length"].number_value or 10
-
-        if speechio.speech_provider == 'elevenlabs' and speechio.speech_provider_key != '':
-            eleven.set_api_key(speechio.speech_provider_key)
-        else:
-            speechio.speech_provider = 'google'
+        speechio = speechio.reconfigure(config, dependencies)
 
         LOGGER.debug(json.dumps(speechio.__dict__))
         return speechio
@@ -102,4 +87,21 @@ class SpeechIOService(SpeechService, Reconfigurable):
         return text
 
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
-        self = self.new(config, dependencies)
+        self.speech_provider = config.attributes.fields["speech_provider"].string_value or 'google'
+        self.speech_provider_key = config.attributes.fields["speech_provider_key"].string_value or ''
+        self.speech_voice = config.attributes.fields["speech_voice"].string_value or 'Josh'
+        self.completion_provider = config.attributes.fields["completion_provider"].string_value or 'openaigpt35turbo'
+        self.completion_provider_org = config.attributes.fields["completion_provider_org"].string_value or ''
+        self.completion_provider_key = config.attributes.fields["completion_provider_key"].string_value or ''
+        self.listen = config.attributes.fields["listen"].bool_value or False
+        self.listen_trigger_say = config.attributes.fields["listen_trigger_say"].string_value or "robot say"
+        self.listen_trigger_completion = config.attributes.fields["listen_trigger_completion"].string_value or "hey Robot"
+        self.listen_trigger_command = config.attributes.fields["listen_trigger_command"].string_value or "robot now"
+        self.listen_command_buffer_length = config.attributes.fields["listen_command_buffer_length"].number_value or 10
+
+        if self.speech_provider == 'elevenlabs' and self.speech_provider_key != '':
+            eleven.set_api_key(self.speech_provider_key)
+        else:
+            self.speech_provider = 'google'
+        
+        return self
