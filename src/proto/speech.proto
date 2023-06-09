@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package viamlabs.service.speech.v1;
+
+import "google/api/annotations.proto";
+
+service SpeechService {
+  rpc Say(SayRequest) returns (SayResponse) {
+    option (google.api.http) = {
+      post: "/acme/api/v1/service/speech/{name}/say"
+    };
+  }
+}
+
+message SayRequest {
+  string name = 1;
+  string text = 2;
+}
+
+message SayResponse {
+  string text = 1;
+}
