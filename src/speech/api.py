@@ -31,7 +31,7 @@ from viam.resource.types import RESOURCE_TYPE_SERVICE, Subtype
 from viam.services.service_base import ServiceBase
 
 from ..proto.speech_grpc import SpeechServiceBase, SpeechServiceStub
-from ..proto.speech_pb2 import SayRequest, SayResponse
+from ..proto.speech_pb2 import SayRequest, SayResponse, CompletionRequest, CompletionResponse
 
 
 class SpeechService(ServiceBase):
@@ -42,7 +42,9 @@ class SpeechService(ServiceBase):
     @abc.abstractmethod
     async def say(self, text: str) -> str:
         ...
-
+    @abc.abstractmethod
+    async def completion(self, text: str) -> str:
+        ...
 
 class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
     """Example gRPC service for the Speech service"""
@@ -57,6 +59,13 @@ class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
         resp = await service.say(request.text)
         await stream.send_message(SayResponse(text=resp))
 
+    async def Completion(self, stream: Stream[CompletionRequest, CompletionResponse]) -> None:
+        request = await stream.recv_message()
+        assert request is not None
+        name = request.name
+        service = self.get_resource(name)
+        resp = await service.completion(request.text)
+        await stream.send_message(CompletionResponse(text=resp))
 
 class SpeechClient(SpeechService):
     """Example gRPC client for the Speech Service"""
@@ -69,4 +78,9 @@ class SpeechClient(SpeechService):
     async def say(self, text: str) -> str:
         request = SayRequest(name=self.name, text=text)
         response: SayResponse = await self.client.Say(request)
+        return response.text
+    
+    async def completion(self, text: str) -> str:
+        request = CompletionRequest(name=self.name, text=text)
+        response: CompletionResponse = await self.client.Completion(request)
         return response.text

@@ -2,6 +2,7 @@ from typing import ClassVar, Mapping, Sequence
 from enum import Enum
 import time
 import os
+import re
 import json
 import hashlib
 from typing_extensions import Self
@@ -69,10 +70,10 @@ class SpeechIOService(SpeechService, Reconfigurable):
         try:
             if not os.path.isfile(file): # read from cache if it exists
                 if (self.speech_provider == 'elevenlabs'):
-                        audio = eleven.generate(text=text, voice=self.speech_voice)
-                        time.sleep(1)
-                        eleven.save(audio=audio, filename=file)
-                        time.sleep(1)
+                    audio = eleven.generate(text=text, voice=self.speech_voice)
+                    time.sleep(1)
+                    eleven.save(audio=audio, filename=file)
+                    time.sleep(1)
                 else:
                     sp = gTTS(text=text, lang='en', slow=False)
                     sp.save(file)
@@ -86,6 +87,18 @@ class SpeechIOService(SpeechService, Reconfigurable):
 
         return text
 
+    async def completion(self, text: str) -> str:
+        if str == "":
+            raise ValueError("No text provided")
+        if self.completion_provider_org == '' or self.completion_provider_key == '':
+            raise ValueError("completion_provider_org or completion_provider_key missing")
+        
+        completion = openai.ChatCompletion.create(model="gpt-3.5-turbo", max_tokens=1024, messages=[{"role": "user", "content": text}])
+        completion = completion.choices[0].message.content
+        completion = re.sub('[^0-9a-zA-Z.!?,:/ ]+', '', completion)
+        await self.say(completion)
+        return completion
+        
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
         self.speech_provider = config.attributes.fields["speech_provider"].string_value or 'google'
         self.speech_provider_key = config.attributes.fields["speech_provider_key"].string_value or ''
@@ -104,4 +117,9 @@ class SpeechIOService(SpeechService, Reconfigurable):
         else:
             self.speech_provider = 'google'
         
+        if self.completion_provider_org:
+            openai.organization = self.completion_provider_org
+        if self.completion_provider_key:
+            openai.api_key = self.completion_provider_key
+
         return self

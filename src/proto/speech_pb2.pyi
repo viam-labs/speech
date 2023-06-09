@@ -46,3 +46,36 @@ class SayResponse(google.protobuf.message.Message):
     def ClearField(self, field_name: typing_extensions.Literal["text", b"text"]) -> None: ...
 
 global___SayResponse = SayResponse
+
+@typing_extensions.final
+class CompletionRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    NAME_FIELD_NUMBER: builtins.int
+    TEXT_FIELD_NUMBER: builtins.int
+    name: builtins.str
+    text: builtins.str
+    def __init__(
+        self,
+        *,
+        name: builtins.str = ...,
+        text: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing_extensions.Literal["name", b"name", "text", b"text"]) -> None: ...
+
+global___CompletionRequest = CompletionRequest
+
+@typing_extensions.final
+class CompletionResponse(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    TEXT_FIELD_NUMBER: builtins.int
+    text: builtins.str
+    def __init__(
+        self,
+        *,
+        text: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing_extensions.Literal["text", b"text"]) -> None: ...
+
+global___CompletionResponse = CompletionResponse

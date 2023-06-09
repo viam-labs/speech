@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16src/proto/speech.proto\x12\x1aviamlabs.service.speech.v1\x1a\x1cgoogle/api/annotations.proto\"4\n\nSayRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n\x04text\x18\x02 \x01(\tR\x04text\"!\n\x0bSayResponse\x12\x12\n\x04text\x18\x01 \x01(\tR\x04text2\x98\x01\n\rSpeechService\x12\x86\x01\n\x03Say\x12&.viamlabs.service.speech.v1.SayRequest\x1a\'.viamlabs.service.speech.v1.SayResponse\".\x82\xd3\xe4\x93\x02(\"&/acme/api/v1/service/speech/{name}/sayb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16src/proto/speech.proto\x12\x1aviamlabs.service.speech.v1\x1a\x1cgoogle/api/annotations.proto\"4\n\nSayRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n\x04text\x18\x02 \x01(\tR\x04text\"!\n\x0bSayResponse\x12\x12\n\x04text\x18\x01 \x01(\tR\x04text\";\n\x11\x43ompletionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n\x04text\x18\x02 \x01(\tR\x04text\"(\n\x12\x43ompletionResponse\x12\x12\n\x04text\x18\x01 \x01(\tR\x04text2\xbd\x02\n\rSpeechService\x12\x86\x01\n\x03Say\x12&.viamlabs.service.speech.v1.SayRequest\x1a\'.viamlabs.service.speech.v1.SayResponse\".\x82\xd3\xe4\x93\x02(\"&/acme/api/v1/service/speech/{name}/say\x12\xa2\x01\n\nCompletion\x12-.viamlabs.service.speech.v1.CompletionRequest\x1a..viamlabs.service.speech.v1.CompletionResponse\"5\x82\xd3\xe4\x93\x02/\"-/acme/api/v1/service/speech/{name}/completionb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -24,10 +24,16 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
   _SPEECHSERVICE.methods_by_name['Say']._options = None
   _SPEECHSERVICE.methods_by_name['Say']._serialized_options = b'\202\323\344\223\002(\"&/acme/api/v1/service/speech/{name}/say'
+  _SPEECHSERVICE.methods_by_name['Completion']._options = None
+  _SPEECHSERVICE.methods_by_name['Completion']._serialized_options = b'\202\323\344\223\002/\"-/acme/api/v1/service/speech/{name}/completion'
   _globals['_SAYREQUEST']._serialized_start=84
   _globals['_SAYREQUEST']._serialized_end=136
   _globals['_SAYRESPONSE']._serialized_start=138
   _globals['_SAYRESPONSE']._serialized_end=171
-  _globals['_SPEECHSERVICE']._serialized_start=174
-  _globals['_SPEECHSERVICE']._serialized_end=326
+  _globals['_COMPLETIONREQUEST']._serialized_start=173
+  _globals['_COMPLETIONREQUEST']._serialized_end=232
+  _globals['_COMPLETIONRESPONSE']._serialized_start=234
+  _globals['_COMPLETIONRESPONSE']._serialized_end=274
+  _globals['_SPEECHSERVICE']._serialized_start=277
+  _globals['_SPEECHSERVICE']._serialized_end=594
 # @@protoc_insertion_point(module_scope)
