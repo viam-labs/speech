@@ -19,6 +19,7 @@ import speech_recognition as sr
 
 from .api import SpeechService
 
+
 mixer.init()
 
 class SpeechProvider(Enum):
@@ -64,7 +65,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         speechio.listen_trigger_say = config.attributes.fields["listen_trigger_say"].string_value or "robot say"
         speechio.listen_trigger_completion = config.attributes.fields["listen_trigger_completion"].string_value or "hey Robot"
         speechio.listen_trigger_command = config.attributes.fields["listen_trigger_command"].string_value or "robot now"
-        speechio.listen_command_buffer_length = config.attributes.fields["listen_command_buffer_length"].int_value or 10
+        speechio.listen_command_buffer_length = config.attributes.fields["listen_command_buffer_length"].number_value or 10
 
         if speechio.speech_provider == 'elevenlabs' and speechio.speech_provider_key != '':
             eleven.set_api_key(speechio.speech_provider_key)

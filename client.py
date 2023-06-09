@@ -19,8 +19,8 @@ async def main():
     print("Resources:")
     print(robot.resource_names)
 
-    speech = SpeechService.from_robot(robot, name="speech")
-    text = await speech.say("Good day!")
+    speech = SpeechService.from_robot(robot, name="speechio")
+    text = await speech.say("Good day, friend!")
     print(f"I said {text}")
 
     await robot.close()
