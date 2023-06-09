@@ -21,7 +21,7 @@ async def main():
 
     speech = SpeechService.from_robot(robot, name="speechio")
     text = await speech.say("Good day, friend!")
-    print(f"I said {text}")
+    print(f"I said '{text}'")
 
     await robot.close()
 

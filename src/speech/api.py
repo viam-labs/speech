@@ -55,7 +55,7 @@ class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
         name = request.name
         service = self.get_resource(name)
         resp = await service.say(request.text)
-        await stream.send_message(SayResponse(said=resp))
+        await stream.send_message(SayResponse(text=resp))
 
 
 class SpeechClient(SpeechService):

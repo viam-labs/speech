@@ -96,7 +96,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         except RuntimeError:
             raise ValueError("Say speech failure")
 
-        return str
+        return text
 
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
         self.subtract = config.attributes.fields["subtract"].bool_value or False
