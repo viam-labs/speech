@@ -1,7 +1,9 @@
 from typing import ClassVar, Mapping, Sequence
 from enum import Enum
 import time
-
+import os
+import json
+import hashlib
 from typing_extensions import Self
 
 from viam.module.types import Reconfigurable
@@ -9,6 +11,7 @@ from viam.proto.app.robot import ComponentConfig
 from viam.proto.common import ResourceName
 from viam.resource.base import ResourceBase
 from viam.resource.types import Model
+from viam import logging
 
 from pygame import mixer
 import elevenlabs as eleven
@@ -18,9 +21,9 @@ import openai
 import speech_recognition as sr
 
 from .api import SpeechService
+LOGGER = logging.getLogger(__name__)
 
-
-mixer.init()
+mixer.init(buffer=1024)
 
 class SpeechProvider(Enum):
     google = "google"
@@ -38,7 +41,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
     """
 
     MODEL: ClassVar[Model] = Model.from_string("viamlabs:speech:speechio")
-    mixer_device: str
     speech_provider: SpeechProvider
     speech_provider_key: str
     speech_voice: str
@@ -54,7 +56,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
         speechio = cls(config.name)
-        speechio.mixer_device = config.attributes.fields["mixer_device"].string_value or 'Built-in Audio Analog Stereo'
         speechio.speech_provider = config.attributes.fields["speech_provider"].string_value or 'google'
         speechio.speech_provider_key = config.attributes.fields["speech_provider_key"].string_value or ''
         speechio.speech_voice = config.attributes.fields["speech_voice"].string_value or 'Josh'
@@ -72,22 +73,24 @@ class SpeechIOService(SpeechService, Reconfigurable):
         else:
             speechio.speech_provider = 'google'
 
+        LOGGER.debug(json.dumps(speechio.__dict__))
         return speechio
 
     async def say(self, text: str) -> str:
         if str == "":
             raise ValueError("No text provided")
 
-        file = "speech.mp3"
+        file = 'cache/' + self.speech_provider + self.speech_voice + hashlib.md5(text.encode()).hexdigest() + ".mp3"
         try:
-            if (self.speech_provider == 'elevenlabs'):
-                    audio = eleven.generate(text=text, voice=self.speech_voice)
-                    time.sleep(1)
-                    eleven.save(audio=audio, filename=file)
-                    time.sleep(1)
-            else:
-                sp = gTTS(text=text, lang='en', slow=False)
-                sp.save(file)
+            if not os.path.isfile(file): # read from cache if it exists
+                if (self.speech_provider == 'elevenlabs'):
+                        audio = eleven.generate(text=text, voice=self.speech_voice)
+                        time.sleep(1)
+                        eleven.save(audio=audio, filename=file)
+                        time.sleep(1)
+                else:
+                    sp = gTTS(text=text, lang='en', slow=False)
+                    sp.save(file)
             mixer.music.load(file) 
             mixer.music.play() # Play it
 
@@ -99,4 +102,4 @@ class SpeechIOService(SpeechService, Reconfigurable):
         return text
 
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
-        self.subtract = config.attributes.fields["subtract"].bool_value or False
+        self = self.new(config, dependencies)
