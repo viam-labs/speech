@@ -28,4 +28,18 @@ The following attributes may be configured as speech service config attributes.
 
 ### speech_provider
 
-enum - "google"|"elevenlabs" (default: "google")
+**enum - "google"|"elevenlabs" (default: "google")**
+
+
+### speech_provider_key
+
+**string (default: "")**
+
+### speech_voice
+
+**string (default: "")**
+
+### speech_voice
+
+**string (default: "")**
+
