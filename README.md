@@ -28,18 +28,64 @@ The following attributes may be configured as speech service config attributes.
 
 ### speech_provider
 
-**enum - "google"|"elevenlabs" (default: "google")**
-
+*enum - "google"|"elevenlabs" (default: "google")*
 
 ### speech_provider_key
 
-**string (default: "")**
+*string (default: "")*
 
 ### speech_voice
 
-**string (default: "")**
+*string (default: "Josh")*
 
-### speech_voice
+If the speech_provider (example: elevenlabs) provides voice options, the voice can be selected here.
 
-**string (default: "")**
+### completion_provider
 
+*enum - "openaigpt35turbo" (default: "openaigpt35turbo")*
+
+Other providers may be supported in the future.  completion_provider_org and completion_provider_key must also be provided.
+
+### completion_provider_org
+
+*string (default: "")*
+
+### completion_provider_key
+
+*string (default: "")*
+
+### completion_persona
+
+*string (default: "")*
+
+If set, will pass "As <completion_persona> respond to '<completion_text'>'" to all completion() requests.
+
+### listen
+
+*boolean (default: False)*
+
+If set to True and the robot as an available microphone device, will listen and respond to *listen_trigger_say*, *listen_trigger_completion* and *listen_trigger_command*, based on input audio being converted to text.
+Note that background (ambient) noise and microphone quailty are important factors in the quality of the STT conversion.
+Currently, Google STT is leveraged.
+
+### listen_trigger_say
+
+*string (default: "robot say")*
+
+If *listen* is True, any audio converted to text that is prefixed with *listen_trigger_say* will be converted to speech and repeated back by the robot.
+
+### listen_trigger_completion
+
+*string (default: "hey robot")*
+
+If *listen* is True, any audio converted to text that is prefixed with *listen_trigger_completion* will be sent to the completion provider (if configured), converted to speech, and repeated back by the robot.
+
+### listen_trigger_command
+
+*string (default: "robot can you")*
+
+If *listen* is True, any audio converted to text that is prefixed with *listen_trigger_command* will be stored in a LIFO buffer (list of strings) of size *listen_command_buffer_length* that can be retrieved via *get_commands()*, enabling programmatic voice control of the robot.
+
+### listen_command_buffer_length
+
+*integer (default: 10)*
