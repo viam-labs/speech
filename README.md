@@ -59,13 +59,13 @@ Other providers may be supported in the future.  [completion_provider_org](#comp
 
 *string (default: "")*
 
-If set, will pass "As <completion_persona> respond to '<[completion_text](#completion_text)'>'" to all completion() requests.
+If set, will pass "As <completion_persona> respond to '<completion_text>'" to all completion() requests.
 
 ### listen
 
 *boolean (default: False)*
 
-If set to True and the robot as an available microphone device, will listen and respond to *listen_trigger_say*, *listen_trigger_completion* and *listen_trigger_command*, based on input audio being converted to text.
+If set to True and the robot as an available microphone device, will listen and respond to [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command), based on input audio being converted to text.
 Note that background (ambient) noise and microphone quailty are important factors in the quality of the STT conversion.
 Currently, Google STT is leveraged.
 
@@ -85,7 +85,7 @@ If *listen* is True, any audio converted to text that is prefixed with *listen_t
 
 *string (default: "robot can you")*
 
-If *listen* is True, any audio converted to text that is prefixed with *listen_trigger_command* will be stored in a LIFO buffer (list of strings) of size *listen_command_buffer_length* that can be retrieved via *get_commands()*, enabling programmatic voice control of the robot.
+If [listen](#listen) is True, any audio converted to text that is prefixed with *listen_trigger_command* will be stored in a LIFO buffer (list of strings) of size [listen_command_buffer_length](#listen_command_buffer_length) that can be retrieved via [get_commands()](#get_commands), enabling programmatic voice control of the robot.
 
 ### listen_command_buffer_length
 
