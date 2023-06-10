@@ -139,7 +139,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
 
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
         self.speech_provider = config.attributes.fields["speech_provider"].string_value or 'google'
-
         self.speech_provider_key = config.attributes.fields["speech_provider_key"].string_value or ''
         self.speech_voice = config.attributes.fields["speech_voice"].string_value or 'Josh'
         self.completion_provider = config.attributes.fields["completion_provider"].string_value or 'openaigpt35turbo'
