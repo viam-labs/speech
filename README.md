@@ -90,3 +90,10 @@ If [listen](#listen) is True, any audio converted to text that is prefixed with 
 ### listen_command_buffer_length
 
 *integer (default: 10)*
+
+### mic_device_name
+
+*string (default: "")*
+
+If not set, will attempt to use the first available microphone device.
+Available microphone device names will logged on module startup.

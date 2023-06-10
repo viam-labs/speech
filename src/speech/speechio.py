@@ -1,4 +1,4 @@
-from typing import ClassVar, Mapping, Sequence
+from typing import ClassVar, Mapping
 from enum import Enum
 import time
 import os
@@ -55,6 +55,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
     listen_trigger_completion: str
     listen_trigger_command: str
     listen_command_buffer_length: int
+    mic_device_name: str
     command_list: list
 
     @classmethod
@@ -69,6 +70,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         if str == "":
             raise ValueError("No text provided")
 
+        LOGGER.info("Generating audio...")
         file = 'cache/' + self.speech_provider + self.speech_voice + self.completion_persona + hashlib.md5(text.encode()).hexdigest() + ".mp3"
         try:
             if not os.path.isfile(file): # read from cache if it exists
@@ -85,6 +87,8 @@ class SpeechIOService(SpeechService, Reconfigurable):
 
             while mixer.music.get_busy():
                 time.sleep(1)
+        
+            LOGGER.info("Played audio...")
         except RuntimeError:
             raise ValueError("Say speech failure")
 
@@ -96,12 +100,14 @@ class SpeechIOService(SpeechService, Reconfigurable):
         if self.completion_provider_org == '' or self.completion_provider_key == '':
             raise ValueError("completion_provider_org or completion_provider_key missing")
         
+        LOGGER.info("Getting completion...")
         if self.completion_persona != '':
             text = "As " + self.completion_persona + " respond to '" + text + "'"
         completion = openai.ChatCompletion.create(model="gpt-3.5-turbo", max_tokens=1024, messages=[{"role": "user", "content": text}])
         completion = completion.choices[0].message.content
         completion = re.sub('[^0-9a-zA-Z.!?,:/ ]+', '', completion).lower()
         completion = completion.replace("as an ai language model", "")
+        LOGGER.info("Got completion...")
         await self.say(completion)
         return completion
         
@@ -146,6 +152,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.completion_provider_key = config.attributes.fields["completion_provider_key"].string_value or ''
         self.completion_persona = config.attributes.fields["completion_persona"].string_value or ''
         self.listen = config.attributes.fields["listen"].bool_value or False
+        self.mic_device_name = config.attributes.fields["mic_device_name"].string_value or ""
         self.listen_trigger_say = config.attributes.fields["listen_trigger_say"].string_value or "robot say"
         self.listen_trigger_completion = config.attributes.fields["listen_trigger_completion"].string_value or "hey robot"
         self.listen_trigger_command = config.attributes.fields["listen_trigger_command"].string_value or "robot can you"
@@ -167,7 +174,14 @@ class SpeechIOService(SpeechService, Reconfigurable):
             r = sr.Recognizer()
             r.energy_threshold = 1568 
             r.dynamic_energy_threshold = True
-            m = sr.Microphone()
+
+            mics = sr.Microphone.list_microphone_names()
+            LOGGER.info(mics)
+            if self.mic_device_name != "":
+                m = sr.Microphone(mics.index(self.mic_device_name))
+            else:
+                m = sr.Microphone()
+            
             with m as source:
                 r.adjust_for_ambient_noise(source)
             r.listen_in_background(m, self.listen_callback)
