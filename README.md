@@ -20,7 +20,7 @@ It returns a string response, which is the completion returned from the completi
 ### get_commands(*integer*)
 
 The *get_commands()* command takes an integer representing the number of commands to return, and returns that number of commands as a list of strings from the FIFO command buffer, removing them from that buffer at the time of return.
-Commands would exist in the buffer if [listen](#listen) is configured and the robot has heard any commands (triggered by *listen_trigger_command*).
+Commands will exist in the buffer if [listen](#listen) is configured and the robot has heard any commands (triggered by [listen_trigger_command](#listen_trigger_command)).
 This enables voice-activated programmatic control of the robot.
 
 ## Configuration
@@ -45,7 +45,7 @@ If the speech_provider (example: elevenlabs) provides voice options, the voice c
 
 *enum - "openaigpt35turbo" (default: "openaigpt35turbo")*
 
-Other providers may be supported in the future.  *completion_provider_org* and *completion_provider_key* must also be provided.
+Other providers may be supported in the future.  [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided.
 
 ### completion_provider_org
 
@@ -59,7 +59,7 @@ Other providers may be supported in the future.  *completion_provider_org* and *
 
 *string (default: "")*
 
-If set, will pass "As <completion_persona> respond to '<completion_text'>'" to all completion() requests.
+If set, will pass "As <completion_persona> respond to '<[completion_text](#completion_text)'>'" to all completion() requests.
 
 ### listen
 
