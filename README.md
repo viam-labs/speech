@@ -85,7 +85,7 @@ If *listen* is True, any audio converted to text that is prefixed with *listen_t
 
 *string (default: "robot can you")*
 
-If [listen](#listen) is True, any audio converted to text that is prefixed with *listen_trigger_command* will be stored in a LIFO buffer (list of strings) of size [listen_command_buffer_length](#listen_command_buffer_length) that can be retrieved via [get_commands()](#get_commands), enabling programmatic voice control of the robot.
+If [listen](#listen) is True, any audio converted to text that is prefixed with *listen_trigger_command* will be stored in a LIFO buffer (list of strings) of size [listen_command_buffer_length](#listen_command_buffer_length) that can be retrieved via [get_commands()](#get_commandsinteger), enabling programmatic voice control of the robot.
 
 ### listen_command_buffer_length
 
