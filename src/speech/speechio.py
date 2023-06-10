@@ -108,7 +108,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
     async def get_commands(self, number: int) -> list:
         LOGGER.info("will get " + str(number) + " commands from command list")
         to_return = self.command_list[0:number]
-        LOGGER.info("to return from command_list: " + str(to_return))
+        LOGGER.debug("to return from command_list: " + str(to_return))
         del self.command_list[0:number]
         return to_return
 
@@ -120,7 +120,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
             transcript = recognizer.recognize_google(audio,show_all=True)
             if type(transcript) is dict and transcript.get("alternative"):
                 heard = transcript["alternative"][0]["transcript"]
-                LOGGER.info("speechio heard " + heard)
+                LOGGER.debug("speechio heard " + heard)
                 if re.search(".*" + self.listen_trigger_say, heard):
                     to_say = re.sub(".*" + self.listen_trigger_say + "\s+",  '', heard)
                     asyncio.run(self.say(to_say))
@@ -130,7 +130,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
                 elif re.search(".*" + self.listen_trigger_command, heard):
                     command = re.sub(".*" + self.listen_trigger_command + "\s+",  '', heard)
                     self.command_list.insert(0, command)
-                    LOGGER.info("added to command_list: '" + command + "'")
+                    LOGGER.debug("added to command_list: '" + command + "'")
                     del self.command_list[self.listen_command_buffer_length:]
         except sr.UnknownValueError:
             LOGGER.warn("Google Speech Recognition could not understand audio")
