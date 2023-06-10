@@ -55,6 +55,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
     listen_trigger_completion: str
     listen_trigger_command: str
     listen_command_buffer_length: int
+    command_list: list
 
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
@@ -104,6 +105,13 @@ class SpeechIOService(SpeechService, Reconfigurable):
         await self.say(completion)
         return completion
         
+    async def get_commands(self, number: int) -> list:
+        LOGGER.info("will get " + str(number) + " commands from command list")
+        to_return = self.command_list[0:number]
+        LOGGER.info("to return from command_list: " + str(to_return))
+        del self.command_list[0:number]
+        return to_return
+
     def listen_callback(self, recognizer, audio):
         try:
             # for testing purposes, we're just using the default API key
@@ -119,6 +127,11 @@ class SpeechIOService(SpeechService, Reconfigurable):
                 elif re.search(".*" + self.listen_trigger_completion, heard):
                     to_say = re.sub(".*" + self.listen_trigger_completion + "\s+",  '', heard)
                     asyncio.run(self.completion(to_say))
+                elif re.search(".*" + self.listen_trigger_command, heard):
+                    command = re.sub(".*" + self.listen_trigger_command + "\s+",  '', heard)
+                    self.command_list.insert(0, command)
+                    LOGGER.info("added to command_list: '" + command + "'")
+                    del self.command_list[self.listen_command_buffer_length:]
         except sr.UnknownValueError:
             LOGGER.warn("Google Speech Recognition could not understand audio")
         except sr.RequestError as e:
@@ -138,6 +151,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.listen_trigger_completion = config.attributes.fields["listen_trigger_completion"].string_value or "hey robot"
         self.listen_trigger_command = config.attributes.fields["listen_trigger_command"].string_value or "robot can you"
         self.listen_command_buffer_length = config.attributes.fields["listen_command_buffer_length"].number_value or 10
+        self.command_list = []
 
         if self.speech_provider == 'elevenlabs' and self.speech_provider_key != '':
             eleven.set_api_key(self.speech_provider_key)

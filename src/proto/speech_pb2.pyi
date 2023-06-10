@@ -3,7 +3,9 @@
 isort:skip_file
 """
 import builtins
+import collections.abc
 import google.protobuf.descriptor
+import google.protobuf.internal.containers
 import google.protobuf.message
 import sys
 
@@ -79,3 +81,37 @@ class CompletionResponse(google.protobuf.message.Message):
     def ClearField(self, field_name: typing_extensions.Literal["text", b"text"]) -> None: ...
 
 global___CompletionResponse = CompletionResponse
+
+@typing_extensions.final
+class GetCommandsRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    NAME_FIELD_NUMBER: builtins.int
+    NUMBER_FIELD_NUMBER: builtins.int
+    name: builtins.str
+    number: builtins.int
+    def __init__(
+        self,
+        *,
+        name: builtins.str = ...,
+        number: builtins.int = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing_extensions.Literal["name", b"name", "number", b"number"]) -> None: ...
+
+global___GetCommandsRequest = GetCommandsRequest
+
+@typing_extensions.final
+class GetCommandsResponse(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    COMMANDS_FIELD_NUMBER: builtins.int
+    @property
+    def commands(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]: ...
+    def __init__(
+        self,
+        *,
+        commands: collections.abc.Iterable[builtins.str] | None = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing_extensions.Literal["commands", b"commands"]) -> None: ...
+
+global___GetCommandsResponse = GetCommandsResponse

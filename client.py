@@ -37,6 +37,9 @@ async def main():
                                    + str(robot.resource_names) + " using documentation at https://docs.viam.com as reference")
     print(f"The robot said '{text}'")
 
+    commands = await speech.get_commands(2)
+    print(str(commands))
+    
     await robot.close()
 
 

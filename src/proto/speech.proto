@@ -16,6 +16,12 @@ service SpeechService {
       post: "/acme/api/v1/service/speech/{name}/completion"
     };
   }
+
+  rpc GetCommands(GetCommandsRequest) returns (GetCommandsResponse) {
+    option (google.api.http) = {
+      post: "/acme/api/v1/service/speech/{name}/get_commands"
+    };
+  }
 }
 
 message SayRequest {
@@ -34,4 +40,13 @@ message CompletionRequest {
 
 message CompletionResponse {
   string text = 1;
+}
+
+message GetCommandsRequest {
+  string name = 1;
+  int32 number = 2;
+}
+
+message GetCommandsResponse {
+  repeated string commands = 1;
 }

@@ -23,6 +23,10 @@ class SpeechServiceBase(abc.ABC):
     async def Completion(self, stream: 'grpclib.server.Stream[src.proto.speech_pb2.CompletionRequest, src.proto.speech_pb2.CompletionResponse]') -> None:
         pass
 
+    @abc.abstractmethod
+    async def GetCommands(self, stream: 'grpclib.server.Stream[src.proto.speech_pb2.GetCommandsRequest, src.proto.speech_pb2.GetCommandsResponse]') -> None:
+        pass
+
     def __mapping__(self) -> typing.Dict[str, grpclib.const.Handler]:
         return {
             '/viamlabs.service.speech.v1.SpeechService/Say': grpclib.const.Handler(
@@ -36,6 +40,12 @@ class SpeechServiceBase(abc.ABC):
                 grpclib.const.Cardinality.UNARY_UNARY,
                 src.proto.speech_pb2.CompletionRequest,
                 src.proto.speech_pb2.CompletionResponse,
+            ),
+            '/viamlabs.service.speech.v1.SpeechService/GetCommands': grpclib.const.Handler(
+                self.GetCommands,
+                grpclib.const.Cardinality.UNARY_UNARY,
+                src.proto.speech_pb2.GetCommandsRequest,
+                src.proto.speech_pb2.GetCommandsResponse,
             ),
         }
 
@@ -54,4 +64,10 @@ class SpeechServiceStub:
             '/viamlabs.service.speech.v1.SpeechService/Completion',
             src.proto.speech_pb2.CompletionRequest,
             src.proto.speech_pb2.CompletionResponse,
+        )
+        self.GetCommands = grpclib.client.UnaryUnaryMethod(
+            channel,
+            '/viamlabs.service.speech.v1.SpeechService/GetCommands',
+            src.proto.speech_pb2.GetCommandsRequest,
+            src.proto.speech_pb2.GetCommandsResponse,
         )

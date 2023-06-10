@@ -31,7 +31,7 @@ from viam.resource.types import RESOURCE_TYPE_SERVICE, Subtype
 from viam.services.service_base import ServiceBase
 
 from ..proto.speech_grpc import SpeechServiceBase, SpeechServiceStub
-from ..proto.speech_pb2 import SayRequest, SayResponse, CompletionRequest, CompletionResponse
+from ..proto.speech_pb2 import SayRequest, SayResponse, CompletionRequest, CompletionResponse, GetCommandsRequest, GetCommandsResponse
 
 
 class SpeechService(ServiceBase):
@@ -44,6 +44,10 @@ class SpeechService(ServiceBase):
         ...
     @abc.abstractmethod
     async def completion(self, text: str) -> str:
+        ...
+
+    @abc.abstractmethod
+    async def get_commands(self, number: int) -> Sequence[str]:
         ...
 
 class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
@@ -66,6 +70,14 @@ class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
         service = self.get_resource(name)
         resp = await service.completion(request.text)
         await stream.send_message(CompletionResponse(text=resp))
+    
+    async def GetCommands(self, stream: Stream[GetCommandsRequest, GetCommandsResponse]) -> None:
+        request = await stream.recv_message()
+        assert request is not None
+        name = request.name
+        service = self.get_resource(name)
+        resp = await service.get_commands(request.number)
+        await stream.send_message(GetCommandsResponse(commands=resp))
 
 class SpeechClient(SpeechService):
     """Example gRPC client for the Speech Service"""
@@ -84,3 +96,8 @@ class SpeechClient(SpeechService):
         request = CompletionRequest(name=self.name, text=text)
         response: CompletionResponse = await self.client.Completion(request)
         return response.text
+    
+    async def get_commands(self, number: int) -> list[str]:
+        request = GetCommandsRequest(name=self.name, number=number)
+        response: GetCommandsResponse = await self.client.GetCommands(request)
+        return response.commands
