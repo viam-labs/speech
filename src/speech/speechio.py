@@ -69,7 +69,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         if str == "":
             raise ValueError("No text provided")
 
-        file = 'cache/' + self.speech_provider + self.speech_voice + hashlib.md5(text.encode()).hexdigest() + ".mp3"
+        file = 'cache/' + self.speech_provider + self.speech_voice + self.completion_persona + hashlib.md5(text.encode()).hexdigest() + ".mp3"
         try:
             if not os.path.isfile(file): # read from cache if it exists
                 if (self.speech_provider == 'elevenlabs'):
