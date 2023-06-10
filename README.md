@@ -44,7 +44,7 @@ If the speech_provider (example: elevenlabs) provides voice options, the voice c
 
 *enum - "openaigpt35turbo" (default: "openaigpt35turbo")*
 
-Other providers may be supported in the future.  completion_provider_org and completion_provider_key must also be provided.
+Other providers may be supported in the future.  *completion_provider_org* and *completion_provider_key* must also be provided.
 
 ### completion_provider_org
 
