@@ -1,2 +1,92 @@
-# speech
-Provides speech-to-text and text-to-speech capabilities
+# speech modular service
+
+*speech* is a modular service that provides text-to-speech (TTS) and speech-to-text(STT) capabilties for robots running on the Viam platform.
+
+## API
+
+The speech resource provides the following API:
+
+### say(*string*)
+
+The *say()* command takes a string, and converts to speech audio that is played back on the robot, provided it has an audio output (speaker) device attached.
+It returns a string response, which is the string that was passed in to the *say()* request.
+
+
+### completion(*string*)
+
+The *completion()* command takes a string, sends that to an AI LLM completion provider (if configured) and converts the returned completion to speech audio that is played back on the robot, provided it has an audio output (speaker) device attached.
+It returns a string response, which is the completion returned from the completion provider.
+
+### get_commands(*integer*)
+
+The *get_commands()* command takes an integer representing the number of commands to return, and returns that number of commands as a list of strings from the FIFO command buffer, removing them from that buffer at the time of return.
+Commands will exist in the buffer if [listen](#listen) is configured and the robot has heard any commands (triggered by [listen_trigger_command](#listen_trigger_command)).
+This enables voice-activated programmatic control of the robot.
+
+## Configuration
+
+The following attributes may be configured as speech service config attributes.
+
+### speech_provider
+
+*enum - "google"|"elevenlabs" (default: "google")*
+
+### speech_provider_key
+
+*string (default: "")*
+
+### speech_voice
+
+*string (default: "Josh")*
+
+If the speech_provider (example: elevenlabs) provides voice options, the voice can be selected here.
+
+### completion_provider
+
+*enum - "openaigpt35turbo" (default: "openaigpt35turbo")*
+
+Other providers may be supported in the future.  [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided.
+
+### completion_provider_org
+
+*string (default: "")*
+
+### completion_provider_key
+
+*string (default: "")*
+
+### completion_persona
+
+*string (default: "")*
+
+If set, will pass "As <completion_persona> respond to '<completion_text>'" to all completion() requests.
+
+### listen
+
+*boolean (default: False)*
+
+If set to True and the robot as an available microphone device, will listen and respond to [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command), based on input audio being converted to text.
+Note that background (ambient) noise and microphone quailty are important factors in the quality of the STT conversion.
+Currently, Google STT is leveraged.
+
+### listen_trigger_say
+
+*string (default: "robot say")*
+
+If *listen* is True, any audio converted to text that is prefixed with *listen_trigger_say* will be converted to speech and repeated back by the robot.
+
+### listen_trigger_completion
+
+*string (default: "hey robot")*
+
+If *listen* is True, any audio converted to text that is prefixed with *listen_trigger_completion* will be sent to the completion provider (if configured), converted to speech, and repeated back by the robot.
+
+### listen_trigger_command
+
+*string (default: "robot can you")*
+
+If [listen](#listen) is True, any audio converted to text that is prefixed with *listen_trigger_command* will be stored in a LIFO buffer (list of strings) of size [listen_command_buffer_length](#listen_command_buffer_length) that can be retrieved via [get_commands()](#get_commandsinteger), enabling programmatic voice control of the robot.
+
+### listen_command_buffer_length
+
+*integer (default: 10)*
