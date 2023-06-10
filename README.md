@@ -20,7 +20,8 @@ It returns a string response, which is the completion returned from the completi
 ### get_commands(*integer*)
 
 The *get_commands()* command takes an integer representing the number of commands to return, and returns that number of commands as a list of strings from the FIFO command buffer, removing them from that buffer at the time of return.
-Commands would exist in the buffer if *listen* is configured and the robot has heard any commands (triggered by *listen_trigger_command*)
+Commands would exist in the buffer if *listen* is configured and the robot has heard any commands (triggered by *listen_trigger_command*).
+This enables voice-activated programmatic control of the robot.
 
 ## Configuration
 
