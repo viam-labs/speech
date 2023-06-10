@@ -49,6 +49,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
     completion_provider: CompletionProvider
     completion_provider_org: str
     completion_provider_key: str
+    completion_persona: str
     listen: bool
     listen_trigger_say: str
     listen_trigger_completion: str
@@ -94,6 +95,8 @@ class SpeechIOService(SpeechService, Reconfigurable):
         if self.completion_provider_org == '' or self.completion_provider_key == '':
             raise ValueError("completion_provider_org or completion_provider_key missing")
         
+        if self.completion_persona != '':
+            text = "As " + self.completion_persona + " respond to '" + text + "'"
         completion = openai.ChatCompletion.create(model="gpt-3.5-turbo", max_tokens=1024, messages=[{"role": "user", "content": text}])
         completion = completion.choices[0].message.content
         completion = re.sub('[^0-9a-zA-Z.!?,:/ ]+', '', completion).lower()
@@ -129,6 +132,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.completion_provider = config.attributes.fields["completion_provider"].string_value or 'openaigpt35turbo'
         self.completion_provider_org = config.attributes.fields["completion_provider_org"].string_value or ''
         self.completion_provider_key = config.attributes.fields["completion_provider_key"].string_value or ''
+        self.completion_persona = config.attributes.fields["completion_persona"].string_value or ''
         self.listen = config.attributes.fields["listen"].bool_value or False
         self.listen_trigger_say = config.attributes.fields["listen_trigger_say"].string_value or "robot say"
         self.listen_trigger_completion = config.attributes.fields["listen_trigger_completion"].string_value or "hey robot"
