@@ -34,9 +34,22 @@ The *get_commands()* command takes an integer representing the number of command
 Commands will exist in the buffer if [listen](#listen) is configured and the robot has heard any commands (triggered by [listen_trigger_command](#listen_trigger_command)).
 This enables voice-activated programmatic control of the robot.
 
-## Configuration
+## Viam Service Configuration
 
 The following attributes may be configured as speech service config attributes.
+For example: the following configuration would set up listening mode, use an ElevenLabs voice "Antoni", make AI completions available, and use a 'Gollum' persona for AI completions:
+
+``` json
+{
+  "completion_provider_org": "org-abc123",
+  "completion_provider_key": "sk-mykey",
+  "completion_persona": "Gollum",
+  "listen": true,
+  "speech_provider": "elevenlabs",
+  "speech_provider_key": "keygoeshere",
+    "speech_voice": "Antoni"
+}
+```
 
 ### speech_provider
 
