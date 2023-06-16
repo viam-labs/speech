@@ -2,6 +2,17 @@
 
 *speech* is a modular service that provides text-to-speech (TTS) and speech-to-text(STT) capabilties for robots running on the Viam platform.
 
+## Prerequisites
+
+``` bash
+sudo apt update && sudo apt upgrade -y
+sudo apt-get install python3
+sudo apt install python3-pip
+sudo apt install python3-pyaudio
+sudo apt-get install alsa-tools alsa-utils
+sudo apt-get install flac
+```
+
 ## API
 
 The speech resource provides the following API:
