@@ -1,6 +1,6 @@
 # speech modular service
 
-*speech* is a modular service that provides text-to-speech (TTS) and speech-to-text(STT) capabilties for robots running on the Viam platform.
+*speech* is a modular service that provides text-to-speech (TTS) and speech-to-text(STT) capabilities for robots running on the Viam platform.
 
 ## Prerequisites
 
