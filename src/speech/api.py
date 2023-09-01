@@ -37,7 +37,7 @@ from ..proto.speech_pb2 import SayRequest, SayResponse, CompletionRequest, Compl
 class SpeechService(ServiceBase):
     """Example service to use with the example module"""
 
-    SUBTYPE: Final = Subtype("viamlabs", RESOURCE_TYPE_SERVICE, "speech")
+    SUBTYPE: Final = Subtype("viam-labs", RESOURCE_TYPE_SERVICE, "speech")
 
     @abc.abstractmethod
     async def say(self, text: str) -> str:

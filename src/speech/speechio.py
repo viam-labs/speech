@@ -42,7 +42,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
     which is required for all models.
     """
 
-    MODEL: ClassVar[Model] = Model.from_string("viamlabs:speech:speechio")
+    MODEL: ClassVar[Model] = Model.from_string("viam-labs:speech:speechio")
     speech_provider: SpeechProvider
     speech_provider_key: str
     speech_voice: str

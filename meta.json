@@ -1,0 +1,13 @@
+{
+  "module_id": "viam-labs:speech",
+  "visibility": "public",
+  "url": "https://github.com/viam-labs/speech",
+  "description": "speech is a modular service that provides text-to-speech (TTS) and speech-to-text(STT) capabilties for machines running on the Viam platform.",
+  "models": [
+    {
+      "api": "viam-labs:service:speech",
+      "model": "viam-labs:speech:speechio"
+    }
+  ],
+  "entrypoint": "run.sh"
+}
