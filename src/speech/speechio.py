@@ -15,6 +15,7 @@ from viam.resource.base import ResourceBase
 from viam.resource.types import Model
 from viam import logging
 
+import pygame
 from pygame import mixer
 import elevenlabs as eleven
 import pygame._sdl2 as sdl2
@@ -86,7 +87,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
             mixer.music.play() # Play it
 
             while mixer.music.get_busy():
-                time.sleep(1)
+                pygame.time.Clock().tick()
         
             LOGGER.info("Played audio...")
         except RuntimeError:
