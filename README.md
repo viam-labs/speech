@@ -47,7 +47,8 @@ For example: the following configuration would set up listening mode, use an Ele
   "listen": true,
   "speech_provider": "elevenlabs",
   "speech_provider_key": "keygoeshere",
-    "speech_voice": "Antoni"
+  "speech_voice": "Antoni",
+  "mic_device_name": "myMic"
 }
 ```
 
@@ -84,6 +85,12 @@ Other providers may be supported in the future.  [completion_provider_org](#comp
 *string (default: "")*
 
 If set, will pass "As <completion_persona> respond to '<completion_text>'" to all completion() requests.
+
+### mic_device_name
+
+*string (default: "")*
+
+If set, will attempt to use a specifically labeled device name.  If not set, will use system default mic device.
 
 ### listen
 
