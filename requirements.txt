@@ -5,6 +5,7 @@ elevenlabs
 googleapis-common-protos
 grpclib
 gtts
+pyaudio
 h2==4.1.0
 hpack==4.0.0
 hyperframe==6.0.1
