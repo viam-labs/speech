@@ -13,6 +13,12 @@ sudo apt-get install alsa-tools alsa-utils
 sudo apt-get install flac
 ```
 
+On MacOS:
+
+``` bash
+brew install portaudio
+```
+
 ## API
 
 The speech resource provides the following API:
