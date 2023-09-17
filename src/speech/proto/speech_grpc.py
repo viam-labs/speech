@@ -10,7 +10,7 @@ if typing.TYPE_CHECKING:
     import grpclib.server
 
 import google.api.annotations_pb2
-import speech_pb2
+from . import speech_pb2
 
 
 class SpeechServiceBase(abc.ABC):
