@@ -134,3 +134,18 @@ If [listen](#listen) is True, any audio converted to text that is prefixed with 
 
 If not set, will attempt to use the first available microphone device.
 Available microphone device names will logged on module startup.
+
+## Using speech with the Python SDK
+
+Because this module uses a custom protobuf-based API, you must include this project in your client code.  One way to do this is to include it in your requirements.txt as follows:
+
+```
+audioout @ git+https://github.com/viam-labs/speech.git@main
+```
+
+You can now import and use it in your code as follows:
+
+```
+from speech import SpeechService
+speech = SpeechService.from_robot(robot, name="speech")
+speech.say(...)
