@@ -35,7 +35,6 @@ from .proto.speech_pb2 import SayRequest, SayResponse, CompletionRequest, Comple
 
 
 class SpeechService(ServiceBase):
-    """Example service to use with the example module"""
 
     SUBTYPE: Final = Subtype("viam-labs", RESOURCE_TYPE_SERVICE, "speech")
 
@@ -51,7 +50,6 @@ class SpeechService(ServiceBase):
         ...
 
 class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
-    """Example gRPC service for the Speech service"""
 
     RESOURCE_TYPE = SpeechService
 
@@ -80,7 +78,6 @@ class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
         await stream.send_message(GetCommandsResponse(commands=resp))
 
 class SpeechClient(SpeechService):
-    """Example gRPC client for the Speech Service"""
 
     def __init__(self, name: str, channel: Channel) -> None:
         self.channel = channel

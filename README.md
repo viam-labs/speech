@@ -103,7 +103,7 @@ If set, will attempt to use a specifically labeled device name.  If not set, wil
 *boolean (default: False)*
 
 If set to True and the robot as an available microphone device, will listen and respond to [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command), based on input audio being converted to text.
-Note that background (ambient) noise and microphone quailty are important factors in the quality of the STT conversion.
+Note that background (ambient) noise and microphone quality are important factors in the quality of the STT conversion.
 Currently, Google STT is leveraged.
 
 ### listen_trigger_say
