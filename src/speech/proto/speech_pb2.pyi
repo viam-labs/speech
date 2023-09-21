@@ -115,3 +115,36 @@ class GetCommandsResponse(google.protobuf.message.Message):
     def ClearField(self, field_name: typing_extensions.Literal["commands", b"commands"]) -> None: ...
 
 global___GetCommandsResponse = GetCommandsResponse
+
+@typing_extensions.final
+class ListenTriggerRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    NAME_FIELD_NUMBER: builtins.int
+    TYPE_FIELD_NUMBER: builtins.int
+    name: builtins.str
+    type: builtins.str
+    def __init__(
+        self,
+        *,
+        name: builtins.str = ...,
+        type: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing_extensions.Literal["name", b"name", "type", b"type"]) -> None: ...
+
+global___ListenTriggerRequest = ListenTriggerRequest
+
+@typing_extensions.final
+class ListenTriggerResponse(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    TEXT_FIELD_NUMBER: builtins.int
+    text: builtins.str
+    def __init__(
+        self,
+        *,
+        text: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing_extensions.Literal["text", b"text"]) -> None: ...
+
+global___ListenTriggerResponse = ListenTriggerResponse

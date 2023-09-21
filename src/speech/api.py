@@ -49,6 +49,10 @@ class SpeechService(ServiceBase):
     async def get_commands(self, number: int) -> Sequence[str]:
         ...
 
+    @abc.abstractmethod
+    async def listen_trigger(self, type: str) -> Sequence[str]:
+        ...
+
 class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
 
     RESOURCE_TYPE = SpeechService
@@ -77,6 +81,14 @@ class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
         resp = await service.get_commands(request.number)
         await stream.send_message(GetCommandsResponse(commands=resp))
 
+    async def ListenTrigger(self, stream: Stream[ListenTriggerRequest, ListenTriggerResponse]) -> None:
+        request = await stream.recv_message()
+        assert request is not None
+        name = request.name
+        service = self.get_resource(name)
+        resp = await service.listen_trigger(request.type)
+        await stream.send_message(ListenTriggerResponse(text=resp))
+
 class SpeechClient(SpeechService):
 
     def __init__(self, name: str, channel: Channel) -> None:
@@ -98,3 +110,8 @@ class SpeechClient(SpeechService):
         request = GetCommandsRequest(name=self.name, number=number)
         response: GetCommandsResponse = await self.client.GetCommands(request)
         return response.commands
+    
+    async def listen_trigger(self, text: str) -> str:
+        request = ListenTriggerRequest(name=self.name, text=text)
+        response: ListenTriggerResponse = await self.client.ListenTrigger(request)
+        return response.text

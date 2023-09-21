@@ -27,6 +27,10 @@ class SpeechServiceBase(abc.ABC):
     async def GetCommands(self, stream: 'grpclib.server.Stream[speech_pb2.GetCommandsRequest, speech_pb2.GetCommandsResponse]') -> None:
         pass
 
+    @abc.abstractmethod
+    async def ListenTrigger(self, stream: 'grpclib.server.Stream[speech_pb2.ListenTriggerRequest, speech_pb2.ListenTriggerResponse]') -> None:
+        pass
+
     def __mapping__(self) -> typing.Dict[str, grpclib.const.Handler]:
         return {
             '/viamlabs.service.speech.v1.SpeechService/Say': grpclib.const.Handler(
@@ -46,6 +50,12 @@ class SpeechServiceBase(abc.ABC):
                 grpclib.const.Cardinality.UNARY_UNARY,
                 speech_pb2.GetCommandsRequest,
                 speech_pb2.GetCommandsResponse,
+            ),
+            '/viamlabs.service.speech.v1.SpeechService/ListenTrigger': grpclib.const.Handler(
+                self.ListenTrigger,
+                grpclib.const.Cardinality.UNARY_UNARY,
+                speech_pb2.ListenTriggerRequest,
+                speech_pb2.ListenTriggerResponse,
             ),
         }
 
@@ -70,4 +80,10 @@ class SpeechServiceStub:
             '/viamlabs.service.speech.v1.SpeechService/GetCommands',
             speech_pb2.GetCommandsRequest,
             speech_pb2.GetCommandsResponse,
+        )
+        self.ListenTrigger = grpclib.client.UnaryUnaryMethod(
+            channel,
+            '/viamlabs.service.speech.v1.SpeechService/ListenTrigger',
+            speech_pb2.ListenTriggerRequest,
+            speech_pb2.ListenTriggerResponse,
         )

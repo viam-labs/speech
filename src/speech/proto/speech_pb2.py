@@ -14,13 +14,12 @@ _sym_db = _symbol_database.Default()
 from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0cspeech.proto\x12\x1aviamlabs.service.speech.v1\x1a\x1cgoogle/api/annotations.proto\"4\n\nSayRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n\x04text\x18\x02 \x01(\tR\x04text\"!\n\x0bSayResponse\x12\x12\n\x04text\x18\x01 \x01(\tR\x04text\";\n\x11\x43ompletionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n\x04text\x18\x02 \x01(\tR\x04text\"(\n\x12\x43ompletionResponse\x12\x12\n\x04text\x18\x01 \x01(\tR\x04text\"@\n\x12GetCommandsRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n\x06number\x18\x02 \x01(\x05R\x06number\"1\n\x13GetCommandsResponse\x12\x1a\n\x08\x63ommands\x18\x01 \x03(\tR\x08\x63ommands2\xe7\x03\n\rSpeechService\x12\x86\x01\n\x03Say\x12&.viamlabs.service.speech.v1.SayRequest\x1a\'.viamlabs.service.speech.v1.SayResponse\".\x82\xd3\xe4\x93\x02(\"&/acme/api/v1/service/speech/{name}/say\x12\xa2\x01\n\nCompletion\x12-.viamlabs.service.speech.v1.CompletionRequest\x1a..viamlabs.service.speech.v1.CompletionResponse\"5\x82\xd3\xe4\x93\x02/\"-/acme/api/v1/service/speech/{name}/completion\x12\xa7\x01\n\x0bGetCommands\x12..viamlabs.service.speech.v1.GetCommandsRequest\x1a/.viamlabs.service.speech.v1.GetCommandsResponse\"7\x82\xd3\xe4\x93\x02\x31\"//acme/api/v1/service/speech/{name}/get_commandsb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0cspeech.proto\x12\x1aviamlabs.service.speech.v1\x1a\x1cgoogle/api/annotations.proto\"4\n\nSayRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n\x04text\x18\x02 \x01(\tR\x04text\"!\n\x0bSayResponse\x12\x12\n\x04text\x18\x01 \x01(\tR\x04text\";\n\x11\x43ompletionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n\x04text\x18\x02 \x01(\tR\x04text\"(\n\x12\x43ompletionResponse\x12\x12\n\x04text\x18\x01 \x01(\tR\x04text\"@\n\x12GetCommandsRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n\x06number\x18\x02 \x01(\x05R\x06number\"1\n\x13GetCommandsResponse\x12\x1a\n\x08\x63ommands\x18\x01 \x03(\tR\x08\x63ommands\">\n\x14ListenTriggerRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n\x04type\x18\x02 \x01(\tR\x04type\"+\n\x15ListenTriggerResponse\x12\x12\n\x04text\x18\x01 \x01(\tR\x04text2\x99\x05\n\rSpeechService\x12\x86\x01\n\x03Say\x12&.viamlabs.service.speech.v1.SayRequest\x1a\'.viamlabs.service.speech.v1.SayResponse\".\x82\xd3\xe4\x93\x02(\"&/acme/api/v1/service/speech/{name}/say\x12\xa2\x01\n\nCompletion\x12-.viamlabs.service.speech.v1.CompletionRequest\x1a..viamlabs.service.speech.v1.CompletionResponse\"5\x82\xd3\xe4\x93\x02/\"-/acme/api/v1/service/speech/{name}/completion\x12\xa7\x01\n\x0bGetCommands\x12..viamlabs.service.speech.v1.GetCommandsRequest\x1a/.viamlabs.service.speech.v1.GetCommandsResponse\"7\x82\xd3\xe4\x93\x02\x31\"//acme/api/v1/service/speech/{name}/get_commands\x12\xaf\x01\n\rListenTrigger\x12\x30.viamlabs.service.speech.v1.ListenTriggerRequest\x1a\x31.viamlabs.service.speech.v1.ListenTriggerResponse\"9\x82\xd3\xe4\x93\x02\x33\"1/acme/api/v1/service/speech/{name}/listen_triggerb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'speech_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
-
   DESCRIPTOR._options = None
   _SPEECHSERVICE.methods_by_name['Say']._options = None
   _SPEECHSERVICE.methods_by_name['Say']._serialized_options = b'\202\323\344\223\002(\"&/acme/api/v1/service/speech/{name}/say'
@@ -28,6 +27,8 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _SPEECHSERVICE.methods_by_name['Completion']._serialized_options = b'\202\323\344\223\002/\"-/acme/api/v1/service/speech/{name}/completion'
   _SPEECHSERVICE.methods_by_name['GetCommands']._options = None
   _SPEECHSERVICE.methods_by_name['GetCommands']._serialized_options = b'\202\323\344\223\0021\"//acme/api/v1/service/speech/{name}/get_commands'
+  _SPEECHSERVICE.methods_by_name['ListenTrigger']._options = None
+  _SPEECHSERVICE.methods_by_name['ListenTrigger']._serialized_options = b'\202\323\344\223\0023\"1/acme/api/v1/service/speech/{name}/listen_trigger'
   _globals['_SAYREQUEST']._serialized_start=74
   _globals['_SAYREQUEST']._serialized_end=126
   _globals['_SAYRESPONSE']._serialized_start=128
@@ -40,6 +41,10 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['_GETCOMMANDSREQUEST']._serialized_end=330
   _globals['_GETCOMMANDSRESPONSE']._serialized_start=332
   _globals['_GETCOMMANDSRESPONSE']._serialized_end=381
-  _globals['_SPEECHSERVICE']._serialized_start=384
-  _globals['_SPEECHSERVICE']._serialized_end=871
+  _globals['_LISTENTRIGGERREQUEST']._serialized_start=383
+  _globals['_LISTENTRIGGERREQUEST']._serialized_end=445
+  _globals['_LISTENTRIGGERRESPONSE']._serialized_start=447
+  _globals['_LISTENTRIGGERRESPONSE']._serialized_end=490
+  _globals['_SPEECHSERVICE']._serialized_start=493
+  _globals['_SPEECHSERVICE']._serialized_end=1158
 # @@protoc_insertion_point(module_scope)

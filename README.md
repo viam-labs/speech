@@ -40,6 +40,12 @@ The *get_commands()* command takes an integer representing the number of command
 Commands will exist in the buffer if [listen](#listen) is configured and the robot has heard any commands (triggered by [listen_trigger_command](#listen_trigger_command)).
 This enables voice-activated programmatic control of the robot.
 
+### listen_trigger(type=*enum(say|completion|command)*)
+
+The next speech heard will trigger *say*, *completion* or *command*, depending on the trigger_type passed in.
+No trigger string is required, and configured trigger string will not be respected.
+If speech is already being recognized when this command is called, that speech will be taken as the next trigger when complete.
+
 ## Viam Service Configuration
 
 The following attributes may be configured as speech service config attributes.
@@ -92,37 +98,42 @@ Other providers may be supported in the future.  [completion_provider_org](#comp
 
 If set, will pass "As <completion_persona> respond to '<completion_text>'" to all completion() requests.
 
-### mic_device_name
-
-*string (default: "")*
-
-If set, will attempt to use a specifically labeled device name.  If not set, will use system default mic device.
-
 ### listen
 
-*boolean (default: False)*
+*boolean (default: false)*
 
-If set to True and the robot as an available microphone device, will listen and respond to [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command), based on input audio being converted to text.
+If set to true and the robot as an available microphone device, will enable listening in the background.
+
+If [listen_triggers_active](#listen_triggers_active) is also enabled, it will respond to [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command), based on input audio being converted to text.
+
+If *listen* is enabled and [listen_triggers_active](#listen_triggers_active) is disabled, triggers will occur when [listen_trigger](#listen_trigger) is called.
+
 Note that background (ambient) noise and microphone quality are important factors in the quality of the STT conversion.
 Currently, Google STT is leveraged.
+
+### listen_triggers_active
+
+*boolean (default: false)*
+
+When [listen](#listen) and *listen_triggers_active* are both enabled, [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command) will trigger.
 
 ### listen_trigger_say
 
 *string (default: "robot say")*
 
-If *listen* is True, any audio converted to text that is prefixed with *listen_trigger_say* will be converted to speech and repeated back by the robot.
+If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_say* will be converted to speech and repeated back by the robot.
 
 ### listen_trigger_completion
 
 *string (default: "hey robot")*
 
-If *listen* is True, any audio converted to text that is prefixed with *listen_trigger_completion* will be sent to the completion provider (if configured), converted to speech, and repeated back by the robot.
+If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_completion* will be sent to the completion provider (if configured), converted to speech, and repeated back by the robot.
 
 ### listen_trigger_command
 
 *string (default: "robot can you")*
 
-If [listen](#listen) is True, any audio converted to text that is prefixed with *listen_trigger_command* will be stored in a LIFO buffer (list of strings) of size [listen_command_buffer_length](#listen_command_buffer_length) that can be retrieved via [get_commands()](#get_commandsinteger), enabling programmatic voice control of the robot.
+If [listen](#listen) is true, any audio converted to text that is prefixed with *listen_trigger_command* will be stored in a LIFO buffer (list of strings) of size [listen_command_buffer_length](#listen_command_buffer_length) that can be retrieved via [get_commands()](#get_commandsinteger), enabling programmatic voice control of the robot.
 
 ### listen_command_buffer_length
 
@@ -133,19 +144,23 @@ If [listen](#listen) is True, any audio converted to text that is prefixed with 
 *string (default: "")*
 
 If not set, will attempt to use the first available microphone device.
+If set, will attempt to use a specifically labeled device name.
 Available microphone device names will logged on module startup.
 
 ## Using speech with the Python SDK
 
 Because this module uses a custom protobuf-based API, you must include this project in your client code.  One way to do this is to include it in your requirements.txt as follows:
 
-```
+``` txt
 audioout @ git+https://github.com/viam-labs/speech.git@main
 ```
 
 You can now import and use it in your code as follows:
 
-```
+``` python
 from speech import SpeechService
 speech = SpeechService.from_robot(robot, name="speech")
 speech.say(...)
+```
+
+For now, the protobuf bindings are only generated for Python.

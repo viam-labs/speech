@@ -52,12 +52,15 @@ class SpeechIOService(SpeechService, Reconfigurable):
     completion_provider_key: str
     completion_persona: str
     listen: bool
+    listen_triggers_active: bool
     listen_trigger_say: str
     listen_trigger_completion: str
     listen_trigger_command: str
     listen_command_buffer_length: int
     mic_device_name: str
     command_list: list
+    trigger_active: bool
+    active_trigger_type: str
 
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
@@ -95,8 +98,19 @@ class SpeechIOService(SpeechService, Reconfigurable):
 
         return text
 
+    async def listen_trigger(self, type: str) -> str:
+        if type == '':
+            raise ValueError("No trigger type provided")
+        if type in ['command', 'completion', 'say']:
+            self.active_trigger_type = type
+            self.trigger_active = True
+        else:
+            raise ValueError("Invalid trigger type provided")
+        
+        return "OK"
+        
     async def completion(self, text: str) -> str:
-        if str == "":
+        if text == "":
             raise ValueError("No text provided")
         if self.completion_provider_org == '' or self.completion_provider_key == '':
             raise ValueError("completion_provider_org or completion_provider_key missing")
@@ -128,13 +142,16 @@ class SpeechIOService(SpeechService, Reconfigurable):
             if type(transcript) is dict and transcript.get("alternative"):
                 heard = transcript["alternative"][0]["transcript"]
                 LOGGER.debug("speechio heard " + heard)
-                if re.search(".*" + self.listen_trigger_say, heard):
+                if (self.listen_triggers_active and re.search(".*" + self.listen_trigger_say, heard))or (self.trigger_active and self.active_trigger_type == 'say'):
+                    self.trigger_active = False
                     to_say = re.sub(".*" + self.listen_trigger_say + "\s+",  '', heard)
                     asyncio.run(self.say(to_say))
-                elif re.search(".*" + self.listen_trigger_completion, heard):
+                elif (self.listen_triggers_active and re.search(".*" + self.listen_trigger_completion, heard)) or (self.trigger_active and self.active_trigger_type == 'completion'):
+                    self.trigger_active = False
                     to_say = re.sub(".*" + self.listen_trigger_completion + "\s+",  '', heard)
                     asyncio.run(self.completion(to_say))
-                elif re.search(".*" + self.listen_trigger_command, heard):
+                elif (self.listen_triggers_active and re.search(".*" + self.listen_trigger_command, heard)) or (self.trigger_active and self.active_trigger_type == 'command'):
+                    self.trigger_active = False
                     command = re.sub(".*" + self.listen_trigger_command + "\s+",  '', heard)
                     self.command_list.insert(0, command)
                     LOGGER.debug("added to command_list: '" + command + "'")
@@ -153,12 +170,15 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.completion_provider_key = config.attributes.fields["completion_provider_key"].string_value or ''
         self.completion_persona = config.attributes.fields["completion_persona"].string_value or ''
         self.listen = config.attributes.fields["listen"].bool_value or False
+        self.listen_triggers_active = config.attributes.fields["listen_triggers_active"].bool_value or False
         self.mic_device_name = config.attributes.fields["mic_device_name"].string_value or ""
         self.listen_trigger_say = config.attributes.fields["listen_trigger_say"].string_value or "robot say"
         self.listen_trigger_completion = config.attributes.fields["listen_trigger_completion"].string_value or "hey robot"
         self.listen_trigger_command = config.attributes.fields["listen_trigger_command"].string_value or "robot can you"
         self.listen_command_buffer_length = config.attributes.fields["listen_command_buffer_length"].number_value or 10
         self.command_list = []
+        self.trigger_active = False
+        self.active_trigger_type = ''
 
         if self.speech_provider == 'elevenlabs' and self.speech_provider_key != '':
             eleven.set_api_key(self.speech_provider_key)

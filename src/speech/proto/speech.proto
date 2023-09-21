@@ -22,6 +22,12 @@ service SpeechService {
       post: "/acme/api/v1/service/speech/{name}/get_commands"
     };
   }
+  
+  rpc ListenTrigger(ListenTriggerRequest) returns (ListenTriggerResponse) {
+    option (google.api.http) = {
+      post: "/acme/api/v1/service/speech/{name}/listen_trigger"
+    };
+  }
 }
 
 message SayRequest {
@@ -49,4 +55,13 @@ message GetCommandsRequest {
 
 message GetCommandsResponse {
   repeated string commands = 1;
+}
+
+message ListenTriggerRequest {
+  string name = 1;
+  string type = 2;
+}
+
+message ListenTriggerResponse {
+  string text = 1;
 }
