@@ -31,7 +31,7 @@ from viam.resource.types import RESOURCE_TYPE_SERVICE, Subtype
 from viam.services.service_base import ServiceBase
 
 from .proto.speech_grpc import SpeechServiceBase, SpeechServiceStub
-from .proto.speech_pb2 import SayRequest, SayResponse, CompletionRequest, CompletionResponse, GetCommandsRequest, GetCommandsResponse
+from .proto.speech_pb2 import SayRequest, SayResponse, CompletionRequest, CompletionResponse, GetCommandsRequest, GetCommandsResponse, ListenTriggerRequest, ListenTriggerResponse
 
 
 class SpeechService(ServiceBase):
@@ -111,7 +111,7 @@ class SpeechClient(SpeechService):
         response: GetCommandsResponse = await self.client.GetCommands(request)
         return response.commands
     
-    async def listen_trigger(self, text: str) -> str:
-        request = ListenTriggerRequest(name=self.name, text=text)
+    async def listen_trigger(self, type: str) -> str:
+        request = ListenTriggerRequest(name=self.name, type=type)
         response: ListenTriggerResponse = await self.client.ListenTrigger(request)
         return response.text
