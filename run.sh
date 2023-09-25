@@ -1,7 +1,7 @@
 #!/bin/sh
 cd `dirname $0`
 
-pip install --upgrade -r requirements.txt
+pip3 install --upgrade -r requirements.txt
 
 # Be sure to use `exec` so that termination signals reach the python process,
 # or handle forwarding termination signals manually
