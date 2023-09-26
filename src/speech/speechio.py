@@ -170,6 +170,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.completion_provider_key = config.attributes.fields["completion_provider_key"].string_value or ''
         self.completion_persona = config.attributes.fields["completion_persona"].string_value or ''
         self.listen = config.attributes.fields["listen"].bool_value or False
+        self.listen_phrase_time_limit = config.attributes.fields["listen_phrase_time_limit"].number_value or None
         self.listen_triggers_active = config.attributes.fields["listen_triggers_active"].bool_value or False
         self.mic_device_name = config.attributes.fields["mic_device_name"].string_value or ""
         self.listen_trigger_say = config.attributes.fields["listen_trigger_say"].string_value or "robot say"
@@ -205,6 +206,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
             
             with m as source:
                 r.adjust_for_ambient_noise(source)
-            r.listen_in_background(m, self.listen_callback)
+            r.listen_in_background(source=m, phrase_time_limit=self.listen_phrase_time_limit, callback=self.listen_callback)
 
         return self

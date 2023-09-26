@@ -114,6 +114,10 @@ If *listen* is enabled and [listen_triggers_active](#listen_triggers_active) is 
 Note that background (ambient) noise and microphone quality are important factors in the quality of the STT conversion.
 Currently, Google STT is leveraged.
 
+### listen_phrase_time_limit (default: None)
+
+The maximum number of seconds that this will allow a phrase to continue before stopping and returning the part of the phrase processed before the time limit was reached. The resulting audio will be the phrase cut off at the time limit. If phrase_timeout is None, there will be no phrase time limit.
+
 ### listen_triggers_active
 
 *boolean (default: false)*
