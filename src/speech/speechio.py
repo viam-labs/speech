@@ -33,7 +33,7 @@ class SpeechProvider(Enum):
     elevenlabs = "elevenlabs"
 
 class CompletionProvider(Enum):
-    openaigpt35turbo = "openaigpt35turbo"
+    openaigpt35turbo = "openai"
 
 class SpeechIOService(SpeechService, Reconfigurable):
     """This is the specific implementation of a ``SpeechService`` (defined in api.py)
@@ -48,6 +48,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
     speech_provider_key: str
     speech_voice: str
     completion_provider: CompletionProvider
+    completion_model: str
     completion_provider_org: str
     completion_provider_key: str
     completion_persona: str
@@ -80,13 +81,12 @@ class SpeechIOService(SpeechService, Reconfigurable):
             if not os.path.isfile(file): # read from cache if it exists
                 if (self.speech_provider == 'elevenlabs'):
                     audio = eleven.generate(text=text, voice=self.speech_voice)
-                    time.sleep(1)
                     eleven.save(audio=audio, filename=file)
-                    time.sleep(1)
                 else:
                     sp = gTTS(text=text, lang='en', slow=False)
                     sp.save(file)
             mixer.music.load(file) 
+            LOGGER.info("Playing audio...")
             mixer.music.play() # Play it
 
             while mixer.music.get_busy():
@@ -118,9 +118,9 @@ class SpeechIOService(SpeechService, Reconfigurable):
         LOGGER.info("Getting completion...")
         if self.completion_persona != '':
             text = "As " + self.completion_persona + " respond to '" + text + "'"
-        completion = openai.ChatCompletion.create(model="gpt-3.5-turbo", max_tokens=1024, messages=[{"role": "user", "content": text}])
+        completion = openai.ChatCompletion.create(model=self.completion_model, max_tokens=1024, messages=[{"role": "user", "content": text}])
         completion = completion.choices[0].message.content
-        completion = re.sub('[^0-9a-zA-Z.!?,:/ ]+', '', completion).lower()
+        completion = re.sub('[^0-9a-zA-Z.!?,:\'/ ]+', '', completion).lower()
         completion = completion.replace("as an ai language model", "")
         LOGGER.info("Got completion...")
         await self.say(completion)
@@ -165,7 +165,8 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.speech_provider = config.attributes.fields["speech_provider"].string_value or 'google'
         self.speech_provider_key = config.attributes.fields["speech_provider_key"].string_value or ''
         self.speech_voice = config.attributes.fields["speech_voice"].string_value or 'Josh'
-        self.completion_provider = config.attributes.fields["completion_provider"].string_value or 'openaigpt35turbo'
+        self.completion_provider = config.attributes.fields["completion_provider"].string_value or 'openai'
+        self.completion_model = config.attributes.fields["completion_model"].string_value or 'gpt-4'
         self.completion_provider_org = config.attributes.fields["completion_provider_org"].string_value or ''
         self.completion_provider_key = config.attributes.fields["completion_provider_key"].string_value or ''
         self.completion_persona = config.attributes.fields["completion_persona"].string_value or ''

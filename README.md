@@ -83,9 +83,15 @@ If the speech_provider (example: elevenlabs) provides voice options, the voice c
 
 ### completion_provider
 
-*enum - "openaigpt35turbo" (default: "openaigpt35turbo")*
+*enum - "openai" (default: "openai")*
 
 Other providers may be supported in the future.  [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided.
+
+### completion_model
+
+*enum - "gpt-4|gpt-3.5-turbo" (default: "gpt-4")*
+
+Other models may be supported in the future.  [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided.
 
 ### completion_provider_org
 
