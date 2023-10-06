@@ -161,3 +161,6 @@ cython_debug/
 
 module.tar.gz
 cache/*
+AppDir
+appimage-build
+*.AppImage*

@@ -25,6 +25,7 @@ import speech_recognition as sr
 
 from .api import SpeechService
 LOGGER = logging.getLogger(__name__)
+CACHEDIR = "/tmp/cache"
 
 mixer.init(buffer=1024)
 
@@ -76,7 +77,10 @@ class SpeechIOService(SpeechService, Reconfigurable):
             raise ValueError("No text provided")
 
         LOGGER.info("Generating audio...")
-        file = 'cache/' + self.speech_provider + self.speech_voice + self.completion_persona + hashlib.md5(text.encode()).hexdigest() + ".mp3"
+        if not os.path.isdir(CACHEDIR):
+            os.mkdir(CACHEDIR)
+
+        file = CACHEDIR + '/' + self.speech_provider + self.speech_voice + self.completion_persona + hashlib.md5(text.encode()).hexdigest() + ".mp3"
         try:
             if not os.path.isfile(file): # read from cache if it exists
                 if (self.speech_provider == 'elevenlabs'):
