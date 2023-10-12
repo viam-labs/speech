@@ -28,6 +28,7 @@ LOGGER = logging.getLogger(__name__)
 CACHEDIR = "/tmp/cache"
 
 mixer.init(buffer=1024)
+rec_state = {}
 
 class SpeechProvider(Enum):
     google = "google"
@@ -35,6 +36,13 @@ class SpeechProvider(Enum):
 
 class CompletionProvider(Enum):
     openaigpt35turbo = "openai"
+
+class RecState():
+    listen_closer = None
+    mic = None
+    rec = None
+
+rec_state = RecState()
 
 class SpeechIOService(SpeechService, Reconfigurable):
     """This is the specific implementation of a ``SpeechService`` (defined in api.py)
@@ -54,7 +62,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
     completion_provider_key: str
     completion_persona: str
     listen: bool
-    listen_triggers_active: bool
     listen_trigger_say: str
     listen_trigger_completion: str
     listen_trigger_command: str
@@ -103,11 +110,15 @@ class SpeechIOService(SpeechService, Reconfigurable):
         return text
 
     async def listen_trigger(self, type: str) -> str:
+        if self.listen:
+            # if in background listening mode, this method is ignored
+            return
         if type == '':
             raise ValueError("No trigger type provided")
         if type in ['command', 'completion', 'say']:
             self.active_trigger_type = type
             self.trigger_active = True
+            rec_state.listen_closer = rec_state.rec.listen_in_background(source=rec_state.mic, phrase_time_limit=self.listen_phrase_time_limit, callback=self.listen_callback)
         else:
             raise ValueError("Invalid trigger type provided")
         
@@ -146,20 +157,24 @@ class SpeechIOService(SpeechService, Reconfigurable):
             if type(transcript) is dict and transcript.get("alternative"):
                 heard = transcript["alternative"][0]["transcript"]
                 LOGGER.debug("speechio heard " + heard)
-                if (self.listen_triggers_active and re.search(".*" + self.listen_trigger_say, heard))or (self.trigger_active and self.active_trigger_type == 'say'):
+                if (self.listen and re.search(".*" + self.listen_trigger_say, heard))or (self.trigger_active and self.active_trigger_type == 'say'):
                     self.trigger_active = False
                     to_say = re.sub(".*" + self.listen_trigger_say + "\s+",  '', heard)
                     asyncio.run(self.say(to_say))
-                elif (self.listen_triggers_active and re.search(".*" + self.listen_trigger_completion, heard)) or (self.trigger_active and self.active_trigger_type == 'completion'):
+                elif (self.listen and re.search(".*" + self.listen_trigger_completion, heard)) or (self.trigger_active and self.active_trigger_type == 'completion'):
                     self.trigger_active = False
                     to_say = re.sub(".*" + self.listen_trigger_completion + "\s+",  '', heard)
                     asyncio.run(self.completion(to_say))
-                elif (self.listen_triggers_active and re.search(".*" + self.listen_trigger_command, heard)) or (self.trigger_active and self.active_trigger_type == 'command'):
+                elif (self.listen and re.search(".*" + self.listen_trigger_command, heard)) or (self.trigger_active and self.active_trigger_type == 'command'):
                     self.trigger_active = False
                     command = re.sub(".*" + self.listen_trigger_command + "\s+",  '', heard)
                     self.command_list.insert(0, command)
                     LOGGER.debug("added to command_list: '" + command + "'")
                     del self.command_list[self.listen_command_buffer_length:]
+                if not self.listen:
+                    # stop listening if not in background listening mode
+                    LOGGER.debug("will close background listener")
+                    rec_state.listen_closer()
         except sr.UnknownValueError:
             LOGGER.warn("Google Speech Recognition could not understand audio")
         except sr.RequestError as e:
@@ -176,7 +191,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.completion_persona = config.attributes.fields["completion_persona"].string_value or ''
         self.listen = config.attributes.fields["listen"].bool_value or False
         self.listen_phrase_time_limit = config.attributes.fields["listen_phrase_time_limit"].number_value or None
-        self.listen_triggers_active = config.attributes.fields["listen_triggers_active"].bool_value or False
         self.mic_device_name = config.attributes.fields["mic_device_name"].string_value or ""
         self.listen_trigger_say = config.attributes.fields["listen_trigger_say"].string_value or "robot say"
         self.listen_trigger_completion = config.attributes.fields["listen_trigger_completion"].string_value or "hey robot"
@@ -196,21 +210,25 @@ class SpeechIOService(SpeechService, Reconfigurable):
         if self.completion_provider_key:
             openai.api_key = self.completion_provider_key
 
-        # set up listening if desired
-        if self.listen == True:
-            r = sr.Recognizer()
-            r.energy_threshold = 1568 
-            r.dynamic_energy_threshold = True
+        # set up speech recognition
+        if rec_state.listen_closer != None:
+            rec_state.listen_closer(True)
+        rec_state.rec = sr.Recognizer()
+        rec_state.rec.dynamic_energy_threshold = True
 
-            mics = sr.Microphone.list_microphone_names()
-            LOGGER.info(mics)
-            if self.mic_device_name != "":
-                m = sr.Microphone(mics.index(self.mic_device_name))
-            else:
-                m = sr.Microphone()
-            
-            with m as source:
-                r.adjust_for_ambient_noise(source)
-            r.listen_in_background(source=m, phrase_time_limit=self.listen_phrase_time_limit, callback=self.listen_callback)
+        mics = sr.Microphone.list_microphone_names()
+        LOGGER.info(mics)
+        if self.mic_device_name != "":
+            rec_state.mic = sr.Microphone(mics.index(self.mic_device_name))
+        else:
+            rec_state.mic = sr.Microphone()
+        
+        with rec_state.mic as source:
+            rec_state.rec.adjust_for_ambient_noise(source, 2)
+
+        # set up background listening if desired
+        if self.listen == True:
+            LOGGER.debug("Will listen in background")
+            rec_state.listen_closer = rec_state.rec.listen_in_background(source=rec_state.mic, phrase_time_limit=self.listen_phrase_time_limit, callback=self.listen_callback)
 
         return self

@@ -46,8 +46,8 @@ This enables voice-activated programmatic control of the robot.
 ### listen_trigger(type=*enum(say|completion|command)*)
 
 The next phrase heard will trigger *say*, *completion* or *command*, depending on the trigger_type passed in.
-No trigger string is required, and configured trigger string will not be respected.
-If speech is already being recognized when this command is called, that phrase will be taken as the next trigger when complete.
+No trigger string is required, and any configured trigger string will not be respected.
+This will be ignored if the service is configured with *listen* (background listening) active.
 
 ## Viam Service Configuration
 
@@ -113,7 +113,7 @@ If set, will pass "As <completion_persona> respond to '<completion_text>'" to al
 
 If set to true and the robot as an available microphone device, will enable listening in the background.
 
-If [listen_triggers_active](#listen_triggers_active) is also enabled, it will respond to [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command), based on input audio being converted to text.
+If enabled, it will respond to configured [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command), based on input audio being converted to text.
 
 If *listen* is enabled and [listen_triggers_active](#listen_triggers_active) is disabled, triggers will occur when [listen_trigger](#listen_trigger) is called.
 
@@ -128,12 +128,6 @@ The maximum number of seconds that this will allow a phrase to continue before s
 The resulting audio will be the phrase cut off at the time limit.
 If phrase_timeout is None, there will be no phrase time limit.
 Note: if you are seeing instance where phrases are not being returned for much longer than you expect, try changing this to ~5 or so.
-
-### listen_triggers_active
-
-*boolean (default: false)*
-
-When [listen](#listen) and *listen_triggers_active* are both enabled, [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command) will trigger.
 
 ### listen_trigger_say
 
