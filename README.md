@@ -46,8 +46,7 @@ This enables voice-activated programmatic control of the robot.
 ### listen_trigger(type=*enum(say|completion|command)*)
 
 The next phrase heard will trigger *say*, *completion* or *command*, depending on the trigger_type passed in.
-No trigger string is required, and any configured trigger string will not be respected.
-This will be ignored if the service is configured with *listen* (background listening) active.
+No trigger string is required, but any configured trigger string will be respected.
 
 ## Viam Service Configuration
 

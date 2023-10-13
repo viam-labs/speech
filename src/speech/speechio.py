@@ -110,15 +110,13 @@ class SpeechIOService(SpeechService, Reconfigurable):
         return text
 
     async def listen_trigger(self, type: str) -> str:
-        if self.listen:
-            # if in background listening mode, this method is ignored
-            return
         if type == '':
             raise ValueError("No trigger type provided")
         if type in ['command', 'completion', 'say']:
             self.active_trigger_type = type
             self.trigger_active = True
-            rec_state.listen_closer = rec_state.rec.listen_in_background(source=rec_state.mic, phrase_time_limit=self.listen_phrase_time_limit, callback=self.listen_callback)
+            if not self.listen:
+                rec_state.listen_closer = rec_state.rec.listen_in_background(source=rec_state.mic, phrase_time_limit=self.listen_phrase_time_limit, callback=self.listen_callback)
         else:
             raise ValueError("Invalid trigger type provided")
         
