@@ -28,6 +28,12 @@ service SpeechService {
       post: "/acme/api/v1/service/speech/{name}/listen_trigger"
     };
   }
+
+  rpc IsSpeaking(IsSpeakingRequest) returns (IsSpeakingResponse) {
+    option (google.api.http) = {
+      post: "/acme/api/v1/service/speech/{name}/is_speaking"
+    };
+  }
 }
 
 message SayRequest {
@@ -64,4 +70,12 @@ message ListenTriggerRequest {
 
 message ListenTriggerResponse {
   string text = 1;
+}
+
+message IsSpeakingRequest {
+  string name = 1;
+}
+
+message IsSpeakingResponse {
+  bool status = 1;
 }

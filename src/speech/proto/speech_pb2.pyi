@@ -148,3 +148,33 @@ class ListenTriggerResponse(google.protobuf.message.Message):
     def ClearField(self, field_name: typing_extensions.Literal["text", b"text"]) -> None: ...
 
 global___ListenTriggerResponse = ListenTriggerResponse
+
+@typing_extensions.final
+class IsSpeakingRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    NAME_FIELD_NUMBER: builtins.int
+    name: builtins.str
+    def __init__(
+        self,
+        *,
+        name: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing_extensions.Literal["name", b"name"]) -> None: ...
+
+global___IsSpeakingRequest = IsSpeakingRequest
+
+@typing_extensions.final
+class IsSpeakingResponse(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    STATUS_FIELD_NUMBER: builtins.int
+    status: builtins.bool
+    def __init__(
+        self,
+        *,
+        status: builtins.bool = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing_extensions.Literal["status", b"status"]) -> None: ...
+
+global___IsSpeakingResponse = IsSpeakingResponse

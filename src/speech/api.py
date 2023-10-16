@@ -31,7 +31,7 @@ from viam.resource.types import RESOURCE_TYPE_SERVICE, Subtype
 from viam.services.service_base import ServiceBase
 
 from .proto.speech_grpc import SpeechServiceBase, SpeechServiceStub
-from .proto.speech_pb2 import SayRequest, SayResponse, CompletionRequest, CompletionResponse, GetCommandsRequest, GetCommandsResponse, ListenTriggerRequest, ListenTriggerResponse
+from .proto.speech_pb2 import SayRequest, SayResponse, CompletionRequest, CompletionResponse, GetCommandsRequest, GetCommandsResponse, ListenTriggerRequest, ListenTriggerResponse, IsSpeakingRequest, IsSpeakingResponse
 
 
 class SpeechService(ServiceBase):
@@ -51,6 +51,10 @@ class SpeechService(ServiceBase):
 
     @abc.abstractmethod
     async def listen_trigger(self, type: str) -> Sequence[str]:
+        ...
+
+    @abc.abstractmethod
+    async def is_speaking(self) -> bool:
         ...
 
 class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
@@ -89,6 +93,14 @@ class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
         resp = await service.listen_trigger(request.type)
         await stream.send_message(ListenTriggerResponse(text=resp))
 
+    async def IsSpeaking(self, stream: Stream[IsSpeakingRequest, IsSpeakingResponse]) -> None:
+        request = await stream.recv_message()
+        assert request is not None
+        name = request.name
+        service = self.get_resource(name)
+        resp = await service.is_speaking()
+        await stream.send_message(IsSpeakingResponse(status=resp))
+
 class SpeechClient(SpeechService):
 
     def __init__(self, name: str, channel: Channel) -> None:
@@ -114,4 +126,9 @@ class SpeechClient(SpeechService):
     async def listen_trigger(self, type: str) -> str:
         request = ListenTriggerRequest(name=self.name, type=type)
         response: ListenTriggerResponse = await self.client.ListenTrigger(request)
+        return response.text
+    
+    async def is_speaking(self) -> bool:
+        request = IsSpeakingRequest(name=self.name)
+        response: IsSpeakingResponse = await self.client.IsSpeaking(request)
         return response.text
