@@ -131,4 +131,4 @@ class SpeechClient(SpeechService):
     async def is_speaking(self) -> bool:
         request = IsSpeakingRequest(name=self.name)
         response: IsSpeakingResponse = await self.client.IsSpeaking(request)
-        return response.text
+        return response.status

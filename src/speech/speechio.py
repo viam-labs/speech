@@ -70,7 +70,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
     command_list: list
     trigger_active: bool
     active_trigger_type: str
-    is_speaking: bool
+    speaking: bool
 
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
@@ -99,16 +99,16 @@ class SpeechIOService(SpeechService, Reconfigurable):
                     sp.save(file)
             mixer.music.load(file) 
             LOGGER.info("Playing audio...")
-            self.is_speaking = True
+            self.speaking = True
             mixer.music.play() # Play it
 
             while mixer.music.get_busy():
                 pygame.time.Clock().tick()
         
-            self.is_speaking = False
+            self.speaking = False
             LOGGER.info("Played audio...")
         except RuntimeError:
-            self.is_speaking = False
+            self.speaking = False
             raise ValueError("Say speech failure")
 
         return text
@@ -129,7 +129,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         return "OK"
 
     async def is_speaking(self) -> bool:        
-        return self.is_speaking
+        return self.speaking
       
     async def completion(self, text: str) -> str:
         if text == "":
@@ -206,7 +206,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.command_list = []
         self.trigger_active = False
         self.active_trigger_type = ''
-        self.is_speaking = False
+        self.speaking = False
 
         if self.speech_provider == 'elevenlabs' and self.speech_provider_key != '':
             eleven.set_api_key(self.speech_provider_key)
