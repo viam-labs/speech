@@ -39,10 +39,10 @@ class SpeechService(ServiceBase):
     SUBTYPE: Final = Subtype("viam-labs", RESOURCE_TYPE_SERVICE, "speech")
 
     @abc.abstractmethod
-    async def say(self, text: str) -> str:
+    async def say(self, text: str, blocking: bool) -> str:
         ...
     @abc.abstractmethod
-    async def completion(self, text: str) -> str:
+    async def completion(self, text: str, blocking: bool) -> str:
         ...
 
     @abc.abstractmethod
@@ -108,13 +108,13 @@ class SpeechClient(SpeechService):
         self.client = SpeechServiceStub(channel)
         super().__init__(name)
 
-    async def say(self, text: str) -> str:
-        request = SayRequest(name=self.name, text=text)
+    async def say(self, text: str, blocking: bool) -> str:
+        request = SayRequest(name=self.name, text=text, blocking=blocking)
         response: SayResponse = await self.client.Say(request)
         return response.text
     
-    async def completion(self, text: str) -> str:
-        request = CompletionRequest(name=self.name, text=text)
+    async def completion(self, text: str, blocking: bool) -> str:
+        request = CompletionRequest(name=self.name, text=text, blocking=blocking)
         response: CompletionResponse = await self.client.Completion(request)
         return response.text
     

@@ -79,7 +79,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         LOGGER.debug(json.dumps(speechio.__dict__))
         return speechio
 
-    async def say(self, text: str, blocking: bool = True) -> str:
+    async def say(self, text: str, blocking: bool) -> str:
         if str == "":
             raise ValueError("No text provided")
 

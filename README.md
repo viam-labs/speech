@@ -31,14 +31,14 @@ The speech resource provides the following API:
 The *say()* command takes a string, and converts to speech audio that is played back on the robot, provided it has an audio output (speaker) device attached.
 It returns a string response, which is the string that was passed in to the *say()* request.
 
-If blocking is set to False, will return before the speech is said.
+If blocking is set to True, will wait until the speech is said to return.
 
 ### completion(*string*, blocking=*bool*)
 
 The *completion()* command takes a string, sends that to an AI LLM completion provider (if configured) and converts the returned completion to speech audio that is played back on the robot, provided it has an audio output (speaker) device attached.
 It returns a string response, which is the completion returned from the completion provider.
 
-If blocking is set to False, will return before the speech is said.
+If blocking is set to True, will wait until the speech is said to return.
 
 ### get_commands(*integer*)
 

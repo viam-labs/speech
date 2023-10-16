@@ -25,11 +25,11 @@ async def main():
 
     speech = SpeechService.from_robot(robot, name="speechio")
 
-    text = await speech.say("Good day, friend!")
+    text = await speech.say("Good day, friend!", True)
     print(f"The robot said '{text}'")
 
     # note: this will fail unless you have a completion provider configured
-    text = await speech.completion("Give me a quote one might say if they were saying 'Good day, friend!'")
+    text = await speech.completion("Give me a quote one might say if they were saying 'Good day, friend!'", False)
     print(f"The robot said '{text}'")
 
     # note: this will fail unless you have a completion provider configured
