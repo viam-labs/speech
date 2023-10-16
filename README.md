@@ -8,7 +8,7 @@
 sudo apt update && sudo apt upgrade -y
 sudo apt-get install python3
 sudo apt install python3-pip
-sudo apt install python3-pyaudio
+sudo apt install python3-pyaudio portaudio19-dev
 sudo apt install python3.11-dev
 sudo apt-get install alsa-tools alsa-utils
 sudo apt-get install flac
