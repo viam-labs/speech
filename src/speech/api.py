@@ -66,7 +66,7 @@ class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
         assert request is not None
         name = request.name
         service = self.get_resource(name)
-        resp = await service.say(request.text)
+        resp = await service.say(request.text, request.blocking)
         await stream.send_message(SayResponse(text=resp))
 
     async def Completion(self, stream: Stream[CompletionRequest, CompletionResponse]) -> None:
@@ -74,7 +74,7 @@ class SpeechRPCService(SpeechServiceBase, ResourceRPCServiceBase):
         assert request is not None
         name = request.name
         service = self.get_resource(name)
-        resp = await service.completion(request.text)
+        resp = await service.completion(request.text, request.blocking)
         await stream.send_message(CompletionResponse(text=resp))
     
     async def GetCommands(self, stream: Stream[GetCommandsRequest, GetCommandsResponse]) -> None:

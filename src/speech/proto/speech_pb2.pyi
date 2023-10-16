@@ -22,15 +22,18 @@ class SayRequest(google.protobuf.message.Message):
 
     NAME_FIELD_NUMBER: builtins.int
     TEXT_FIELD_NUMBER: builtins.int
+    BLOCKING_FIELD_NUMBER: builtins.int
     name: builtins.str
     text: builtins.str
+    blocking: builtins.bool
     def __init__(
         self,
         *,
         name: builtins.str = ...,
         text: builtins.str = ...,
+        blocking: builtins.bool = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing_extensions.Literal["name", b"name", "text", b"text"]) -> None: ...
+    def ClearField(self, field_name: typing_extensions.Literal["blocking", b"blocking", "name", b"name", "text", b"text"]) -> None: ...
 
 global___SayRequest = SayRequest
 
@@ -55,15 +58,18 @@ class CompletionRequest(google.protobuf.message.Message):
 
     NAME_FIELD_NUMBER: builtins.int
     TEXT_FIELD_NUMBER: builtins.int
+    BLOCKING_FIELD_NUMBER: builtins.int
     name: builtins.str
     text: builtins.str
+    blocking: builtins.bool
     def __init__(
         self,
         *,
         name: builtins.str = ...,
         text: builtins.str = ...,
+        blocking: builtins.bool = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing_extensions.Literal["name", b"name", "text", b"text"]) -> None: ...
+    def ClearField(self, field_name: typing_extensions.Literal["blocking", b"blocking", "name", b"name", "text", b"text"]) -> None: ...
 
 global___CompletionRequest = CompletionRequest
 

@@ -26,16 +26,19 @@ brew install portaudio
 
 The speech resource provides the following API:
 
-### say(*string*)
+### say(*string*, blocking=*bool*)
 
 The *say()* command takes a string, and converts to speech audio that is played back on the robot, provided it has an audio output (speaker) device attached.
 It returns a string response, which is the string that was passed in to the *say()* request.
 
+If blocking is set to False, will return before the speech is said.
 
-### completion(*string*)
+### completion(*string*, blocking=*bool*)
 
 The *completion()* command takes a string, sends that to an AI LLM completion provider (if configured) and converts the returned completion to speech audio that is played back on the robot, provided it has an audio output (speaker) device attached.
 It returns a string response, which is the completion returned from the completion provider.
+
+If blocking is set to False, will return before the speech is said.
 
 ### get_commands(*integer*)
 
@@ -47,6 +50,10 @@ This enables voice-activated programmatic control of the robot.
 
 The next phrase heard will trigger *say*, *completion* or *command*, depending on the trigger_type passed in.
 No trigger string is required, but any configured trigger string will be respected.
+
+### is_speaking()
+
+Will return True if the speech module is currently speaking.
 
 ## Viam Service Configuration
 

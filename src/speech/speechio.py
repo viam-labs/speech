@@ -70,7 +70,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
     command_list: list
     trigger_active: bool
     active_trigger_type: str
-    speaking: bool
 
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
@@ -80,7 +79,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         LOGGER.debug(json.dumps(speechio.__dict__))
         return speechio
 
-    async def say(self, text: str) -> str:
+    async def say(self, text: str, blocking: bool = True) -> str:
         if str == "":
             raise ValueError("No text provided")
 
@@ -99,16 +98,14 @@ class SpeechIOService(SpeechService, Reconfigurable):
                     sp.save(file)
             mixer.music.load(file) 
             LOGGER.info("Playing audio...")
-            self.speaking = True
             mixer.music.play() # Play it
 
-            while mixer.music.get_busy():
-                pygame.time.Clock().tick()
+            if blocking == True:
+                while mixer.music.get_busy():
+                    pygame.time.Clock().tick()
         
-            self.speaking = False
             LOGGER.info("Played audio...")
         except RuntimeError:
-            self.speaking = False
             raise ValueError("Say speech failure")
 
         return text
@@ -129,9 +126,9 @@ class SpeechIOService(SpeechService, Reconfigurable):
         return "OK"
 
     async def is_speaking(self) -> bool:        
-        return self.speaking
+        return mixer.music.get_busy()
       
-    async def completion(self, text: str) -> str:
+    async def completion(self, text: str, blocking: bool = True) -> str:
         if text == "":
             raise ValueError("No text provided")
         if self.completion_provider_org == '' or self.completion_provider_key == '':
@@ -145,7 +142,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         completion = re.sub('[^0-9a-zA-Z.!?,:\'/ ]+', '', completion).lower()
         completion = completion.replace("as an ai language model", "")
         LOGGER.info("Got completion...")
-        await self.say(completion)
+        await self.say(completion, blocking)
         return completion
         
     async def get_commands(self, number: int) -> list:
@@ -206,7 +203,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.command_list = []
         self.trigger_active = False
         self.active_trigger_type = ''
-        self.speaking = False
 
         if self.speech_provider == 'elevenlabs' and self.speech_provider_key != '':
             eleven.set_api_key(self.speech_provider_key)
