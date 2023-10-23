@@ -189,3 +189,27 @@ speech.say(...)
 ```
 
 For now, the protobuf bindings are only generated for Python.
+
+## Troubleshooting
+
+When using a USB audio device, it may sometimes come up as the default, sometimes not.  To ensure that it comes up consistently as the default:
+
+1. check the existing alsa modules:
+
+```
+cat /proc/asound/modules
+```
+
+This will output something like:
+
+```
+ 0 snd_usb_audio
+ 2 snd_soc_meson_card_utils
+ 3 snd_usb_audio
+```
+
+2. ensure the USB device comes up first by editing /etc/modprobe.d/alsa-base.conf, adding content similar to:
+
+```
+options snd slots=snd-usb-audio,snd_soc_meson_card_utils
+```
