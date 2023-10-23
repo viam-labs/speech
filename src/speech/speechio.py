@@ -79,7 +79,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         LOGGER.debug(json.dumps(speechio.__dict__))
         return speechio
 
-    async def say(self, text: str, blocking: bool) -> str:
+    async def say(self, text: str, blocking: bool, cache_only: bool = False) -> str:
         if str == "":
             raise ValueError("No text provided")
 
@@ -96,17 +96,19 @@ class SpeechIOService(SpeechService, Reconfigurable):
                 else:
                     sp = gTTS(text=text, lang='en', slow=False)
                     sp.save(file)
-            mixer.music.load(file) 
-            LOGGER.info("Playing audio...")
-            mixer.music.play() # Play it
 
-            if blocking == True:
-                while mixer.music.get_busy():
-                    pygame.time.Clock().tick()
-        
-            LOGGER.info("Played audio...")
+            if not cache_only:
+                mixer.music.load(file) 
+                LOGGER.info("Playing audio...")
+                mixer.music.play() # Play it
+
+                if blocking == True:
+                    while mixer.music.get_busy():
+                        pygame.time.Clock().tick()
+            
+                LOGGER.info("Played audio...")
         except RuntimeError:
-            raise ValueError("Say speech failure")
+            raise ValueError("say() speech failure")
 
         return text
 
@@ -128,21 +130,41 @@ class SpeechIOService(SpeechService, Reconfigurable):
     async def is_speaking(self) -> bool:        
         return mixer.music.get_busy()
       
-    async def completion(self, text: str, blocking: bool = True) -> str:
+    async def completion(self, text: str, blocking: bool, cache_only: bool = False) -> str:
         if text == "":
             raise ValueError("No text provided")
         if self.completion_provider_org == '' or self.completion_provider_key == '':
             raise ValueError("completion_provider_org or completion_provider_key missing")
         
-        LOGGER.info("Getting completion...")
-        if self.completion_persona != '':
-            text = "As " + self.completion_persona + " respond to '" + text + "'"
-        completion = openai.ChatCompletion.create(model=self.completion_model, max_tokens=1024, messages=[{"role": "user", "content": text}])
-        completion = completion.choices[0].message.content
-        completion = re.sub('[^0-9a-zA-Z.!?,:\'/ ]+', '', completion).lower()
-        completion = completion.replace("as an ai language model", "")
-        LOGGER.info("Got completion...")
-        await self.say(completion, blocking)
+        completion = ""
+        file = CACHEDIR + '/' + self.speech_provider + self.completion_persona + hashlib.md5(text.encode()).hexdigest() + ".txt"
+        if not cache_only and (self.cache_ahead_completions == True):
+            LOGGER.info("Will try to read completion from cache")
+            if os.path.isfile(file):
+                LOGGER.info("Cache file exists")
+                with open(file) as f:
+                    completion = f.read()
+                LOGGER.info(completion)
+
+            # now cache next one
+            asyncio.ensure_future(self.completion(text, blocking, True))
+
+        if completion == "":
+            LOGGER.info("Getting completion...")
+            if self.completion_persona != '':
+                text = "As " + self.completion_persona + " respond to '" + text + "'"
+            completion = await openai.ChatCompletion.acreate(model=self.completion_model, max_tokens=1024, messages=[{"role": "user", "content": text}])
+            completion = completion.choices[0].message.content
+            completion = re.sub('[^0-9a-zA-Z.!?,:\'/ ]+', '', completion).lower()
+            completion = completion.replace("as an ai language model", "")
+            LOGGER.info("Got completion...")
+
+        if cache_only:
+            with open(file, 'w') as f:
+                f.write(completion)
+            asyncio.ensure_future(self.say(completion, blocking, True))
+        else:
+            await self.say(completion, blocking)
         return completion
         
     async def get_commands(self, number: int) -> list:
@@ -200,6 +222,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.listen_trigger_completion = config.attributes.fields["listen_trigger_completion"].string_value or "hey robot"
         self.listen_trigger_command = config.attributes.fields["listen_trigger_command"].string_value or "robot can you"
         self.listen_command_buffer_length = config.attributes.fields["listen_command_buffer_length"].number_value or 10
+        self.cache_ahead_completions = config.attributes.fields["cache_ahead_completions"].bool_value or False
         self.command_list = []
         self.trigger_active = False
         self.active_trigger_type = ''

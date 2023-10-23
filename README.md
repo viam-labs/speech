@@ -165,6 +165,13 @@ If not set, will attempt to use the first available microphone device.
 If set, will attempt to use a specifically labeled device name.
 Available microphone device names will logged on module startup.
 
+### cache_ahead_completions
+
+*boolean (default: false)*
+
+If true, will read a second completion for the request and cache it for next time a matching request is made.
+This is useful for faster completions when completion text is less variable.
+
 ## Using speech with the Python SDK
 
 Because this module uses a custom protobuf-based API, you must include this project in your client code.  One way to do this is to include it in your requirements.txt as follows:
