@@ -172,6 +172,13 @@ Available microphone device names will logged on module startup.
 If true, will read a second completion for the request and cache it for next time a matching request is made.
 This is useful for faster completions when completion text is less variable.
 
+### disable_mic
+
+*boolean (default: false)*
+
+If true, will not configure any listening capabilities.
+This must be set to true if you do not have a valid microphone attached to your system.
+
 ## Using speech with the Python SDK
 
 Because this module uses a custom protobuf-based API, you must include this project in your client code.  One way to do this is to include it in your requirements.txt as follows:

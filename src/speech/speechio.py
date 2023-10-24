@@ -70,6 +70,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
     command_list: list
     trigger_active: bool
     active_trigger_type: str
+    disable_mic: bool
 
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
@@ -223,6 +224,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.listen_trigger_command = config.attributes.fields["listen_trigger_command"].string_value or "robot can you"
         self.listen_command_buffer_length = config.attributes.fields["listen_command_buffer_length"].number_value or 10
         self.cache_ahead_completions = config.attributes.fields["cache_ahead_completions"].bool_value or False
+        self.disable_mic = config.attributes.fields["disable_mic"].bool_value or False
         self.command_list = []
         self.trigger_active = False
         self.active_trigger_type = ''
@@ -237,25 +239,26 @@ class SpeechIOService(SpeechService, Reconfigurable):
         if self.completion_provider_key:
             openai.api_key = self.completion_provider_key
 
-        # set up speech recognition
-        if rec_state.listen_closer != None:
-            rec_state.listen_closer(True)
-        rec_state.rec = sr.Recognizer()
-        rec_state.rec.dynamic_energy_threshold = True
+        if not self.disable_mic:
+            # set up speech recognition
+            if rec_state.listen_closer != None:
+                rec_state.listen_closer(True)
+            rec_state.rec = sr.Recognizer()
+            rec_state.rec.dynamic_energy_threshold = True
 
-        mics = sr.Microphone.list_microphone_names()
-        LOGGER.info(mics)
-        if self.mic_device_name != "":
-            rec_state.mic = sr.Microphone(mics.index(self.mic_device_name))
-        else:
-            rec_state.mic = sr.Microphone()
-        
-        with rec_state.mic as source:
-            rec_state.rec.adjust_for_ambient_noise(source, 2)
+            mics = sr.Microphone.list_microphone_names()
+            LOGGER.info(mics)
+            if self.mic_device_name != "":
+                rec_state.mic = sr.Microphone(mics.index(self.mic_device_name))
+            else:
+                rec_state.mic = sr.Microphone()
+            
+            with rec_state.mic as source:
+                rec_state.rec.adjust_for_ambient_noise(source, 2)
 
-        # set up background listening if desired
-        if self.listen == True:
-            LOGGER.debug("Will listen in background")
-            rec_state.listen_closer = rec_state.rec.listen_in_background(source=rec_state.mic, phrase_time_limit=self.listen_phrase_time_limit, callback=self.listen_callback)
+            # set up background listening if desired
+            if self.listen == True:
+                LOGGER.debug("Will listen in background")
+                rec_state.listen_closer = rec_state.rec.listen_in_background(source=rec_state.mic, phrase_time_limit=self.listen_phrase_time_limit, callback=self.listen_callback)
 
         return self
