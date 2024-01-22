@@ -1,6 +1,5 @@
 from typing import ClassVar, Mapping
 from enum import Enum
-import time
 import os
 import re
 import json
@@ -18,12 +17,12 @@ from viam import logging
 import pygame
 from pygame import mixer
 import elevenlabs as eleven
-import pygame._sdl2 as sdl2
 from gtts import gTTS
 import openai
 import speech_recognition as sr
 
-from .api import SpeechService
+from speech_service_api import SpeechService
+
 LOGGER = logging.getLogger(__name__)
 CACHEDIR = "/tmp/cache"
 

@@ -2,6 +2,8 @@
 
 *speech* is a modular service that provides text-to-speech (TTS) and speech-to-text(STT) capabilities for robots running on the Viam platform.
 
+This module implements the [Speech Service API (`viam-labs:service:speech`)](https://github.com/viam-labs/speech-service-api). See the documentation for that service to learn more about using it with the Viam SDKs.
+
 ## Prerequisites
 
 On Linux:
@@ -19,39 +21,6 @@ On MacOS:
 ``` bash
 brew install portaudio
 ```
-
-## API
-
-The speech resource provides the following API:
-
-### say(*string*, blocking=*bool*)
-
-The *say()* command takes a string, and converts to speech audio that is played back on the robot, provided it has an audio output (speaker) device attached.
-It returns a string response, which is the string that was passed in to the *say()* request.
-
-If blocking is set to True, will wait until the speech is said to return.
-
-### completion(*string*, blocking=*bool*)
-
-The *completion()* command takes a string, sends that to an AI LLM completion provider (if configured) and converts the returned completion to speech audio that is played back on the robot, provided it has an audio output (speaker) device attached.
-It returns a string response, which is the completion returned from the completion provider.
-
-If blocking is set to True, will wait until the speech is said to return.
-
-### get_commands(*integer*)
-
-The *get_commands()* command takes an integer representing the number of commands to return, and returns that number of commands as a list of strings from the FIFO command buffer, removing them from that buffer at the time of return.
-Commands will exist in the buffer if [listen](#listen) is configured and the robot has heard any commands (triggered by [listen_trigger_command](#listen_trigger_command)).
-This enables voice-activated programmatic control of the robot.
-
-### listen_trigger(type=*enum(say|completion|command)*)
-
-The next phrase heard will trigger *say*, *completion* or *command*, depending on the trigger_type passed in.
-No trigger string is required, but any configured trigger string will be respected.
-
-### is_speaking()
-
-Will return True if the speech module is currently speaking.
 
 ## Viam Service Configuration
 
@@ -176,24 +145,6 @@ This is useful for faster completions when completion text is less variable.
 
 If true, will not configure any listening capabilities.
 This must be set to true if you do not have a valid microphone attached to your system.
-
-## Using speech with the Python SDK
-
-Because this module uses a custom protobuf-based API, you must include this project in your client code.  One way to do this is to include it in your requirements.txt as follows:
-
-``` txt
-audioout @ git+https://github.com/viam-labs/speech.git@main
-```
-
-You can now import and use it in your code as follows:
-
-``` python
-from speech import SpeechService
-speech = SpeechService.from_robot(robot, name="speech")
-speech.say(...)
-```
-
-For now, the protobuf bindings are only generated for Python.
 
 ## Troubleshooting
 
