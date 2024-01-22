@@ -4,17 +4,15 @@
 
 ## Prerequisites
 
-``` bash
-sudo apt update && sudo apt upgrade -y
-sudo apt-get install python3
-sudo apt install python3-pip
-sudo apt install python3-pyaudio portaudio19-dev
-sudo apt install python3.11-dev
-sudo apt-get install alsa-tools alsa-utils
-sudo apt-get install flac
-```
+On Linux:
 
-Note that if you are running another version of Python, the python header package (python3.11-dev) will need to match.
+`run.sh` will automatically install the following system dependencies if not already set up on the machine:
+
+- python3-pyaudio
+- portaudio19-dev
+- alsa-tools
+- alsa-utils
+- flac
 
 On MacOS:
 
