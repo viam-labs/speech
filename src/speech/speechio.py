@@ -1,4 +1,4 @@
-from typing import ClassVar, Mapping
+from typing import ClassVar, Mapping, Optional, Protocol
 from enum import Enum
 import os
 import re
@@ -12,7 +12,7 @@ from viam.proto.app.robot import ComponentConfig
 from viam.proto.common import ResourceName
 from viam.resource.base import ResourceBase
 from viam.resource.types import Model
-from viam import logging
+from viam.logging import getLogger
 
 import pygame
 from pygame import mixer
@@ -23,25 +23,26 @@ import speech_recognition as sr
 
 from speech_service_api import SpeechService
 
-LOGGER = logging.getLogger(__name__)
-CACHEDIR = "/tmp/cache"
-
-mixer.init(buffer=1024)
-rec_state = {}
-
-class SpeechProvider(Enum):
+class SpeechProvider(str, Enum):
     google = "google"
     elevenlabs = "elevenlabs"
 
-class CompletionProvider(Enum):
+class CompletionProvider(str, Enum):
     openaigpt35turbo = "openai"
 
+class Closer(Protocol):
+    def __call__(self, wait_for_stop: bool = True) -> None: ...
+
 class RecState():
-    listen_closer = None
-    mic = None
-    rec = None
+    listen_closer: Optional[Closer] = None
+    mic: Optional[sr.Microphone] = None
+    rec: Optional[sr.Recognizer] = None
+
+LOGGER = getLogger(__name__)
+CACHEDIR = "/tmp/cache"
 
 rec_state = RecState()
+mixer.init(buffer=1024)
 
 class SpeechIOService(SpeechService, Reconfigurable):
     """This is the specific implementation of a ``SpeechService`` (defined in api.py)
@@ -74,7 +75,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
         speechio = cls(config.name)
-        speechio = speechio.reconfigure(config, dependencies)
+        speechio.reconfigure(config, dependencies)
 
         LOGGER.debug(json.dumps(speechio.__dict__))
         return speechio
@@ -87,7 +88,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         if not os.path.isdir(CACHEDIR):
             os.mkdir(CACHEDIR)
 
-        file = CACHEDIR + '/' + self.speech_provider + self.speech_voice + self.completion_persona + hashlib.md5(text.encode()).hexdigest() + ".mp3"
+        file = os.path.join(CACHEDIR, self.speech_provider.value + self.speech_voice + self.completion_persona + hashlib.md5(text.encode()).hexdigest() + ".mp3")
         try:
             if not os.path.isfile(file): # read from cache if it exists
                 if (self.speech_provider == 'elevenlabs'):
@@ -120,8 +121,10 @@ class SpeechIOService(SpeechService, Reconfigurable):
             self.trigger_active = True
             if self.listen:
                 # close and re-open listener so any in-progress speech is not captured
-                rec_state.listen_closer(True)
-            rec_state.listen_closer = rec_state.rec.listen_in_background(source=rec_state.mic, phrase_time_limit=self.listen_phrase_time_limit, callback=self.listen_callback)
+                if rec_state.listen_closer != None:
+                    rec_state.listen_closer(True)
+            if rec_state.rec != None:
+                rec_state.listen_closer = rec_state.rec.listen_in_background(source=rec_state.mic, phrase_time_limit=self.listen_phrase_time_limit, callback=self.listen_callback)
         else:
             raise ValueError("Invalid trigger type provided")
         
@@ -137,7 +140,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
             raise ValueError("completion_provider_org or completion_provider_key missing")
         
         completion = ""
-        file = CACHEDIR + '/' + self.speech_provider + self.completion_persona + hashlib.md5(text.encode()).hexdigest() + ".txt"
+        file = os.path.join(CACHEDIR, self.speech_provider.value + self.completion_persona + hashlib.md5(text.encode()).hexdigest() + ".txt")
         if not cache_only and (self.cache_ahead_completions == True):
             LOGGER.info("Will try to read completion from cache")
             if os.path.isfile(file):
@@ -179,18 +182,18 @@ class SpeechIOService(SpeechService, Reconfigurable):
             # for testing purposes, we're just using the default API key
             # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
             # instead of `r.recognize_google(audio)`
-            transcript = recognizer.recognize_google(audio,show_all=True)
+            transcript = recognizer.recognize_google(audio, show_all=True)
             if type(transcript) is dict and transcript.get("alternative"):
                 heard = transcript["alternative"][0]["transcript"]
                 LOGGER.debug("speechio heard " + heard)
                 if (self.listen and re.search(".*" + self.listen_trigger_say, heard))or (self.trigger_active and self.active_trigger_type == 'say'):
                     self.trigger_active = False
                     to_say = re.sub(".*" + self.listen_trigger_say + "\s+",  '', heard)
-                    asyncio.run(self.say(to_say))
+                    asyncio.run(self.say(to_say, blocking=False))
                 elif (self.listen and re.search(".*" + self.listen_trigger_completion, heard)) or (self.trigger_active and self.active_trigger_type == 'completion'):
                     self.trigger_active = False
                     to_say = re.sub(".*" + self.listen_trigger_completion + "\s+",  '', heard)
-                    asyncio.run(self.completion(to_say))
+                    asyncio.run(self.completion(to_say, blocking=False))
                 elif (self.listen and re.search(".*" + self.listen_trigger_command, heard)) or (self.trigger_active and self.active_trigger_type == 'command'):
                     self.trigger_active = False
                     command = re.sub(".*" + self.listen_trigger_command + "\s+",  '', heard)
@@ -200,17 +203,18 @@ class SpeechIOService(SpeechService, Reconfigurable):
                 if not self.listen:
                     # stop listening if not in background listening mode
                     LOGGER.debug("will close background listener")
-                    rec_state.listen_closer()
+                    if rec_state.listen_closer != None:
+                        rec_state.listen_closer()
         except sr.UnknownValueError:
             LOGGER.warn("Google Speech Recognition could not understand audio")
         except sr.RequestError as e:
             LOGGER.warn("Could not request results from Google Speech Recognition service; {0}".format(e))
 
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
-        self.speech_provider = config.attributes.fields["speech_provider"].string_value or 'google'
+        self.speech_provider = SpeechProvider[config.attributes.fields["speech_provider"].string_value or "google"]
         self.speech_provider_key = config.attributes.fields["speech_provider_key"].string_value or ''
         self.speech_voice = config.attributes.fields["speech_voice"].string_value or 'Josh'
-        self.completion_provider = config.attributes.fields["completion_provider"].string_value or 'openai'
+        self.completion_provider = CompletionProvider[config.attributes.fields["completion_provider"].string_value or "openaigpt35turbo"]
         self.completion_model = config.attributes.fields["completion_model"].string_value or 'gpt-4'
         self.completion_provider_org = config.attributes.fields["completion_provider_org"].string_value or ''
         self.completion_provider_key = config.attributes.fields["completion_provider_key"].string_value or ''
@@ -221,17 +225,17 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.listen_trigger_say = config.attributes.fields["listen_trigger_say"].string_value or "robot say"
         self.listen_trigger_completion = config.attributes.fields["listen_trigger_completion"].string_value or "hey robot"
         self.listen_trigger_command = config.attributes.fields["listen_trigger_command"].string_value or "robot can you"
-        self.listen_command_buffer_length = config.attributes.fields["listen_command_buffer_length"].number_value or 10
+        self.listen_command_buffer_length = int(config.attributes.fields["listen_command_buffer_length"].number_value or 10)
         self.cache_ahead_completions = config.attributes.fields["cache_ahead_completions"].bool_value or False
         self.disable_mic = config.attributes.fields["disable_mic"].bool_value or False
         self.command_list = []
         self.trigger_active = False
         self.active_trigger_type = ''
 
-        if self.speech_provider == 'elevenlabs' and self.speech_provider_key != '':
+        if self.speech_provider == SpeechProvider.elevenlabs and self.speech_provider_key != '':
             eleven.set_api_key(self.speech_provider_key)
         else:
-            self.speech_provider = 'google'
+            self.speech_provider = SpeechProvider.google
         
         if self.completion_provider_org:
             openai.organization = self.completion_provider_org
@@ -259,5 +263,3 @@ class SpeechIOService(SpeechService, Reconfigurable):
             if self.listen == True:
                 LOGGER.debug("Will listen in background")
                 rec_state.listen_closer = rec_state.rec.listen_in_background(source=rec_state.mic, phrase_time_limit=self.listen_phrase_time_limit, callback=self.listen_callback)
-
-        return self
