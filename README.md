@@ -148,7 +148,39 @@ This must be set to true if you do not have a valid microphone attached to your 
 
 ## Troubleshooting
 
-When using a USB audio device, it may sometimes come up as the default, sometimes not.  To ensure that it comes up consistently as the default:
+When using a USB audio device, it may sometimes come up as the default, sometimes not.
+To ensure that it comes up consistently as the default, there are a couple things you can try:
+
+### Using an alsa config file
+
+1. Run `aplay -l`, you will see output similar to:
+
+```
+**** List of PLAYBACK Hardware Devices ****
+card 1: rockchipdp0 [rockchip-dp0], device 0: rockchip-dp0 spdif-hifi-0 [rockchip-dp0 spdif-hifi-0]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+card 2: rockchiphdmi0 [rockchip-hdmi0], device 0: rockchip-hdmi0 i2s-hifi-0 [rockchip-hdmi0 i2s-hifi-0]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+card 3: rockchipes8388 [rockchip-es8388], device 0: dailink-multicodecs ES8323 HiFi-0 [dailink-multicodecs ES8323 HiFi-0]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+card 4: UACDemoV10 [UACDemoV1.0], device 0: USB Audio [USB Audio]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+```
+
+Identify the device card number you wish to use for output.
+In our example, we'll use the USB audio device (card 4).
+As root, add the following to `/etc/asound.conf`
+
+```
+defaults.pcm.card 4
+defaults.ctl.card 4
+```
+
+### Using a modprobe config file
 
 1. check the existing alsa modules:
 
