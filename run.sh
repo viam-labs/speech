@@ -20,7 +20,7 @@ if command -v apt-get; then
   fi
 
   $SUDO apt-get -qq update
-  $SUDO apt install -qqy python3-pyaudio portaudio19-dev alsa-tools alsa-utils flac
+  $SUDO apt install -qqy python3-pyaudio portaudio19-dev alsa-tools alsa-utils flac python3-dev
 else
   echo "Skipping tool installation because your platform is missing apt-get"
   echo "If you see failures below, install the equivalent of python3-venv for your system"
