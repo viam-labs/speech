@@ -6,3 +6,4 @@ pygame
 speechrecognition
 viam-sdk
 speech_service_api @ git+https://github.com/viam-labs/speech-service-api.git@main
+chat_service_api @ git+https://github.com/viam-labs/chat-service-api.git@main

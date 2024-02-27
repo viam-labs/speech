@@ -1,4 +1,4 @@
-from typing import ClassVar, Mapping, Optional, Protocol
+from typing import ClassVar, Mapping, Optional, Protocol, cast
 from enum import Enum
 import os
 import re
@@ -22,7 +22,7 @@ import openai
 import speech_recognition as sr
 
 from speech_service_api import SpeechService
-
+from chat_service_api import Chat
 class SpeechProvider(str, Enum):
     google = "google"
     elevenlabs = "elevenlabs"
@@ -76,7 +76,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
         speechio = cls(config.name)
         speechio.reconfigure(config, dependencies)
-
+        LOGGER.info("done reconfig")
         LOGGER.debug(json.dumps(speechio.__dict__))
         return speechio
 
@@ -136,8 +136,8 @@ class SpeechIOService(SpeechService, Reconfigurable):
     async def completion(self, text: str, blocking: bool, cache_only: bool = False) -> str:
         if text == "":
             raise ValueError("No text provided")
-        if self.completion_provider_org == '' or self.completion_provider_key == '':
-            raise ValueError("completion_provider_org or completion_provider_key missing")
+       # if self.completion_provider_org == '' or self.completion_provider_key == '':
+       #     raise ValueError("completion_provider_org or completion_provider_key missing")
         
         completion = ""
         file = os.path.join(CACHEDIR, self.speech_provider.value + self.completion_persona + hashlib.md5(text.encode()).hexdigest() + ".txt")
@@ -156,10 +156,14 @@ class SpeechIOService(SpeechService, Reconfigurable):
             LOGGER.info("Getting completion...")
             if self.completion_persona != '':
                 text = "As " + self.completion_persona + " respond to '" + text + "'"
-            completion = await openai.ChatCompletion.acreate(model=self.completion_model, max_tokens=1024, messages=[{"role": "user", "content": text}])
-            completion = completion.choices[0].message.content
-            completion = re.sub('[^0-9a-zA-Z.!?,:\'/ ]+', '', completion).lower()
-            completion = completion.replace("as an ai language model", "")
+            #completion = await openai.ChatCompletion.acreate(model=self.completion_model, max_tokens=1024, messages=[{"role": "user", "content": text}])
+            #completion = completion.choices[0].message.content
+            #completion = re.sub('[^0-9a-zA-Z.!?,:\'/ ]+', '', completion).lower()
+            #completion = completion.replace("as an ai language model", "")
+            #actual_llm = self.DEPS[Chat.get_resource_name("llm")]
+            #llmClient = cast(Chat, actual_llm)
+            #llm = ChatClient(llmClient)
+            #completion = await llm.chat(text)
             LOGGER.info("Got completion...")
 
         if cache_only:
@@ -231,7 +235,8 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.command_list = []
         self.trigger_active = False
         self.active_trigger_type = ''
-
+        self.DEPS = dependencies
+        
         if self.speech_provider == SpeechProvider.elevenlabs and self.speech_provider_key != '':
             eleven.set_api_key(self.speech_provider_key)
         else:
