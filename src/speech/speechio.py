@@ -1,3 +1,4 @@
+from io import BytesIO
 from typing import ClassVar, Mapping, Optional, Protocol
 from enum import Enum
 import os
@@ -20,6 +21,7 @@ import elevenlabs as eleven
 from gtts import gTTS
 import openai
 import speech_recognition as sr
+from pydub import AudioSegment
 
 from speech_service_api import SpeechService
 
@@ -177,39 +179,65 @@ class SpeechIOService(SpeechService, Reconfigurable):
         del self.command_list[0:number]
         return to_return
 
+    async def to_text(self, speech: bytes):
+        # speech_recognition expects WAV so we need to convert mp3
+        sound = AudioSegment.from_mp3(BytesIO(speech))
+        sound_out = BytesIO()
+        sound.export(sound_out, format="wav")
+        with sr.AudioFile(sound_out) as source:
+            audio = rec_state.rec.record(source)
+        return self.convert_audio_to_text(audio)
+    
+    async def to_speech(self, text):
+        if (self.speech_provider == 'elevenlabs'):
+            audio = eleven.generate(text=text, voice=self.speech_voice)
+            return audio
+        else:
+            mp3_fp = BytesIO()
+            sp = gTTS(text=text, lang='en', slow=False)
+            sp.write_to_fp(mp3_fp)
+            return mp3_fp.getvalue()
+
     def listen_callback(self, recognizer, audio):
+        heard = self.convert_audio_to_text(audio)
+        LOGGER.debug("speechio heard " + heard)
+        if (heard != ""):
+            if (self.listen and re.search(".*" + self.listen_trigger_say, heard))or (self.trigger_active and self.active_trigger_type == 'say'):
+                self.trigger_active = False
+                to_say = re.sub(".*" + self.listen_trigger_say + "\s+",  '', heard)
+                asyncio.run(self.say(to_say, blocking=False))
+            elif (self.listen and re.search(".*" + self.listen_trigger_completion, heard)) or (self.trigger_active and self.active_trigger_type == 'completion'):
+                self.trigger_active = False
+                to_say = re.sub(".*" + self.listen_trigger_completion + "\s+",  '', heard)
+                asyncio.run(self.completion(to_say, blocking=False))
+            elif (self.listen and re.search(".*" + self.listen_trigger_command, heard)) or (self.trigger_active and self.active_trigger_type == 'command'):
+                self.trigger_active = False
+                command = re.sub(".*" + self.listen_trigger_command + "\s+",  '', heard)
+                self.command_list.insert(0, command)
+                LOGGER.debug("added to command_list: '" + command + "'")
+                del self.command_list[self.listen_command_buffer_length:]
+            if not self.listen:
+                # stop listening if not in background listening mode
+                LOGGER.debug("will close background listener")
+                if rec_state.listen_closer != None:
+                    rec_state.listen_closer()
+
+    def convert_audio_to_text(self, audio):
+        LOGGER.info(audio)
+        heard = ""
         try:
             # for testing purposes, we're just using the default API key
-            # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
-            # instead of `r.recognize_google(audio)`
-            transcript = recognizer.recognize_google(audio, show_all=True)
+                # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
+                # instead of `r.recognize_google(audio)`
+            transcript = rec_state.rec.recognize_google(audio, show_all=True)
             if type(transcript) is dict and transcript.get("alternative"):
                 heard = transcript["alternative"][0]["transcript"]
-                LOGGER.debug("speechio heard " + heard)
-                if (self.listen and re.search(".*" + self.listen_trigger_say, heard))or (self.trigger_active and self.active_trigger_type == 'say'):
-                    self.trigger_active = False
-                    to_say = re.sub(".*" + self.listen_trigger_say + "\s+",  '', heard)
-                    asyncio.run(self.say(to_say, blocking=False))
-                elif (self.listen and re.search(".*" + self.listen_trigger_completion, heard)) or (self.trigger_active and self.active_trigger_type == 'completion'):
-                    self.trigger_active = False
-                    to_say = re.sub(".*" + self.listen_trigger_completion + "\s+",  '', heard)
-                    asyncio.run(self.completion(to_say, blocking=False))
-                elif (self.listen and re.search(".*" + self.listen_trigger_command, heard)) or (self.trigger_active and self.active_trigger_type == 'command'):
-                    self.trigger_active = False
-                    command = re.sub(".*" + self.listen_trigger_command + "\s+",  '', heard)
-                    self.command_list.insert(0, command)
-                    LOGGER.debug("added to command_list: '" + command + "'")
-                    del self.command_list[self.listen_command_buffer_length:]
-                if not self.listen:
-                    # stop listening if not in background listening mode
-                    LOGGER.debug("will close background listener")
-                    if rec_state.listen_closer != None:
-                        rec_state.listen_closer()
         except sr.UnknownValueError:
             LOGGER.warn("Google Speech Recognition could not understand audio")
         except sr.RequestError as e:
             LOGGER.warn("Could not request results from Google Speech Recognition service; {0}".format(e))
-
+        return heard
+    
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
         self.speech_provider = SpeechProvider[config.attributes.fields["speech_provider"].string_value or "google"]
         self.speech_provider_key = config.attributes.fields["speech_provider_key"].string_value or ''
