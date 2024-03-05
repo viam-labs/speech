@@ -180,6 +180,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         return to_return
 
     async def to_text(self, speech: bytes):
+        # speech_recognition expects WAV so we need to convert mp3
         sound = AudioSegment.from_mp3(BytesIO(speech))
         sound_out = BytesIO()
         sound.export(sound_out, format="wav")
