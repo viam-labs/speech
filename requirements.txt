@@ -5,4 +5,5 @@ openai
 pygame
 speechrecognition
 viam-sdk
-speech_service_api @ git+https://github.com/viam-labs/speech-service-api.git@main
+pydub
+speech_service_api @ git+https://github.com/viam-labs/speech-service-api.git@19ebf0b
