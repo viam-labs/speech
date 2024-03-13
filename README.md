@@ -69,7 +69,7 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | Name    | Type   | Inclusion    | Description |
 | ------- | ------ | ------------ | ----------- |
 | `speech_provider` | string | Optional | The speech provider for the voice service: `"google"` or `"elevenlabs"`. Default: `"google"`.  |
-| `speech_provider_key` | string | **Required** | The secret key for the provider. Default: `""`. |
+| `speech_provider_key` | string | **Required** | The secret key for the provider - only required for elevenlabs. Default: `""`. |
 | `speech_voice`  | string | Optional | If the speech_provider (example: elevenlabs) provides voice options, you can select the voice here. Default: `"Josh"`. |
 | `completion_provider`  | string | Optional | `"openai"`. Other providers may be supported in the future. [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided. Default: `"openai"`. |
 | `completion_model`  | string | Optional | `gpt-4` or `gpt-3.5-turbo`. Other models may be supported in the future.  [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided. Default: `"gpt-4"`. |
