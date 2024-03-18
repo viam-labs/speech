@@ -87,6 +87,7 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | `mic_device_name`  | string | Optional | If not set, will attempt to use the first available microphone device.<br><br>If set, will attempt to use a specifically labeled device name.<br><br>Available microphone device names will logged on module startup. Default: `""`. |
 | `cache_ahead_completions`  | boolean | Optional | If true, will read a second completion for the request and cache it for next time a matching request is made. This is useful for faster completions when completion text is less variable. Default: `false`. |
 | `disable_mic`  | boolean | Optional | If true, will not configure any listening capabilities. This must be set to true if you do not have a valid microphone attached to your system. Default: `false`. |
+| `disable_audioout`  | boolean | Optional | If true, will not configure any audio output capabilities. This must be set to true if you do not have a valid audio output device attached to your system. Default: `false`. |
 
 ### Example configuration
 
