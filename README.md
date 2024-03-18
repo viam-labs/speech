@@ -16,7 +16,7 @@ On Linux:
 - `alsa-utils`
 - `flac`
 
-On MacOS, you must run the following command to install the dependencies before adding the modular resource:
+On MacOS, `run.sh` will install the following dependencies using [Homebrew](https://brew.sh) before adding the modular resource:
 
 ``` bash
 brew install portaudio
@@ -48,6 +48,7 @@ On the new component panel, copy and paste the following attribute template into
   "completion_provider_key": "<sk-mykey>",
   "completion_persona": "<PERSONA>",
   "listen": true,
+  "listen_provider": "google",
   "listen_trigger_say": "<TRIGGER-PHRASE>",
   "listen_trigger_completion": "<COMPLETION-PHRASE>",
   "listen_trigger_command": "<COMMAND-TO-RETRIEVE-STORED-TEXT>",
@@ -77,6 +78,7 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | `completion_provider_key`  | string | Optional | Your key for the completion provider. Default: `""`. |
 | `completion_persona`  | string | Optional | If set, will pass "As <completion_persona> respond to '<completion_text>'" to all completion() requests. Default: `""`. |
 | `listen`  | boolean | Optional | If set to true and the robot as an available microphone device, will enable listening in the background.<br><br>If enabled, it will respond to configured [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command), based on input audio being converted to text.<br><br>If *listen* is enabled and [listen_triggers_active](#listen_triggers_active) is disabled, triggers will occur when [listen_trigger](#listen_trigger) is called.<br><br>Note that background (ambient) noise and microphone quality are important factors in the quality of the STT conversion.<br><br>Currently, Google STT is leveraged. Default: `false`. |
+| `listen_provider`  | string | Optional | This can be set to the name of a configured speech service that provides `to_text` and `listen` commands, like [`stt-vosk`](https://app.viam.com/module/viam-labs/stt-vosk). Otherwise, the Google STT API will be used. Default: `"google"`. |
 | `listen_phrase_time_limit`  | float | Optional | The maximum number of seconds that this will allow a phrase to continue before stopping and returning the part of the phrase processed before the time limit was reached.<br><br>The resulting audio will be the phrase cut off at the time limit.<br><br>If phrase_timeout is None, there will be no phrase time limit.<br><br>Note: if you are seeing instance where phrases are not being returned for much longer than you expect, try changing this to ~5 or so. Default: `None`. |
 | `listen_trigger_say`  | string | Optional | If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_say* will be converted to speech and repeated back by the robot. Default: `"robot say"`. |
 | `listen_trigger_completion`  | string | Optional | If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_completion* will be sent to the completion provider (if configured), converted to speech, and repeated back by the robot. Default: `"hey robot"`. |
@@ -88,7 +90,7 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 
 ### Example configuration
 
-The following configuration sets up listening mode, uses an ElevenLabs voice "Antoni", makes AI completions available, and uses a 'Gollum' persona for AI completions:
+The following configuration sets up listening mode with local speech-to-text, uses an ElevenLabs voice "Antoni", makes AI completions available, and uses a 'Gollum' persona for AI completions:
 
 ``` json
 {
@@ -96,6 +98,7 @@ The following configuration sets up listening mode, uses an ElevenLabs voice "An
   "completion_provider_key": "sk-mykey",
   "completion_persona": "Gollum",
   "listen": true,
+  "listen_provider": "stt",
   "speech_provider": "elevenlabs",
   "speech_provider_key": "keygoeshere",
   "speech_voice": "Antoni",
