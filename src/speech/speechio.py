@@ -372,6 +372,9 @@ class SpeechIOService(SpeechService, Reconfigurable):
         if not self.disable_audioout:
             if not mixer.get_init():
                 mixer.init(buffer=1024)
+        else:
+            if mixer.get_init():
+                mixer.quit()
 
         if not self.disable_mic:
             # set up speech recognition
