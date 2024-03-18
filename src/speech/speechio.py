@@ -50,8 +50,6 @@ LOGGER = getLogger(__name__)
 CACHEDIR = "/tmp/cache"
 
 rec_state = RecState()
-mixer.init(buffer=1024)
-
 
 class SpeechIOService(SpeechService, Reconfigurable):
     """This is the specific implementation of a ``SpeechService`` (defined in api.py)
@@ -81,6 +79,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
     trigger_active: bool
     active_trigger_type: str
     disable_mic: bool
+    disable_audioout: bool
 
     @classmethod
     def new(
@@ -347,6 +346,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         )
         self.cache_ahead_completions = bool(attrs.get("cache_ahead_completions", False))
         self.disable_mic = bool(attrs.get("disable_mic", False))
+        self.disable_audioout = bool(attrs.get("disable_audioout", False))
         self.command_list = []
         self.trigger_active = False
         self.active_trigger_type = ""
@@ -368,6 +368,13 @@ class SpeechIOService(SpeechService, Reconfigurable):
         if self.listen_provider != "google":
             stt = dependencies[SpeechService.get_resource_name(self.listen_provider)]
             self.stt = cast(SpeechService, stt)
+
+        if not self.disable_audioout:
+            if not mixer.get_init():
+                mixer.init(buffer=1024)
+        else:
+            if mixer.get_init():
+                mixer.quit()
 
         if not self.disable_mic:
             # set up speech recognition
