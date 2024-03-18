@@ -377,7 +377,8 @@ class SpeechIOService(SpeechService, Reconfigurable):
             rec_state.rec.dynamic_energy_threshold = True
 
             mics = sr.Microphone.list_microphone_names()
-            LOGGER.debug(mics)
+            LOGGER.info(mics)
+
             if self.mic_device_name != "":
                 rec_state.mic = sr.Microphone(mics.index(self.mic_device_name))
             else:
