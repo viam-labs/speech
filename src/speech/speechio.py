@@ -141,7 +141,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
                 # close and re-open listener so any in-progress speech is not captured
                 if rec_state.listen_closer is not None:
                     rec_state.listen_closer(True)
-            if rec_state.rec is not None:
+            if rec_state.rec is not None and rec_state.mic is not None:
                 rec_state.listen_closer = rec_state.rec.listen_in_background(
                     source=rec_state.mic,
                     phrase_time_limit=self.listen_phrase_time_limit,
@@ -376,11 +376,12 @@ class SpeechIOService(SpeechService, Reconfigurable):
             if mixer.get_init():
                 mixer.quit()
 
+        rec_state.rec = sr.Recognizer()
+
         if not self.disable_mic:
             # set up speech recognition
             if rec_state.listen_closer is not None:
                 rec_state.listen_closer(True)
-            rec_state.rec = sr.Recognizer()
             rec_state.rec.dynamic_energy_threshold = True
 
             mics = sr.Microphone.list_microphone_names()
