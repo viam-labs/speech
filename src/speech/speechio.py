@@ -30,6 +30,7 @@ from speech_service_api import SpeechService
 class SpeechProvider(str, Enum):
     google = "google"
     elevenlabs = "elevenlabs"
+    local = "local"
 
 
 class CompletionProvider(str, Enum):
@@ -50,6 +51,7 @@ LOGGER = getLogger(__name__)
 CACHEDIR = "/tmp/cache"
 
 rec_state = RecState()
+
 
 class SpeechIOService(SpeechService, Reconfigurable):
     """This is the specific implementation of a ``SpeechService`` (defined in api.py)
@@ -95,6 +97,9 @@ class SpeechIOService(SpeechService, Reconfigurable):
         if str == "":
             raise ValueError("No text provided")
 
+        if self.tts is not None:
+            return await self.tts.say(text=text, blocking=blocking)
+
         LOGGER.info("Generating audio...")
         if not os.path.isdir(CACHEDIR):
             os.mkdir(CACHEDIR)
@@ -109,7 +114,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         )
         try:
             if not os.path.isfile(file):  # read from cache if it exists
-                if self.speech_provider == "elevenlabs":
+                if self.speech_provider == SpeechProvider.elevenlabs:
                     audio = eleven.generate(text=text, voice=self.speech_voice)
                     eleven.save(audio=audio, filename=file)
                 else:
@@ -153,6 +158,8 @@ class SpeechIOService(SpeechService, Reconfigurable):
         return "OK"
 
     async def is_speaking(self) -> bool:
+        if self.tts is not None:
+            return await self.tts.is_speaking()
         return mixer.music.get_busy()
 
     async def completion(
@@ -245,8 +252,12 @@ class SpeechIOService(SpeechService, Reconfigurable):
         return ""
 
     async def to_speech(self, text):
-        if self.speech_provider == "elevenlabs":
+        if self.speech_provider == SpeechProvider.elevenlabs:
             audio = eleven.generate(text=text, voice=self.speech_voice)
+            return audio
+
+        if self.speech_provider == SpeechProvider.local and self.tts is not None:
+            audio = await self.tts.to_speech(text=text)
             return audio
         else:
             mp3_fp = BytesIO()
@@ -322,6 +333,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
             str(attrs.get("speech_provider", "google"))
         ]
         self.speech_provider_key = str(attrs.get("speech_provider_key", ""))
+        self.speech_service_name = str(attrs.get("speech_service_name", ""))
         self.speech_voice = str(attrs.get("speech_voice", "Josh"))
         self.completion_provider = CompletionProvider[
             str(attrs.get("completion_provider", "openaigpt35turbo"))
@@ -350,13 +362,22 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.command_list = []
         self.trigger_active = False
         self.active_trigger_type = ""
-        self.stt = None
+        self.stt: None | SpeechService = None
+        self.tts: None | SpeechService = None
 
         if (
             self.speech_provider == SpeechProvider.elevenlabs
             and self.speech_provider_key != ""
         ):
             eleven.set_api_key(self.speech_provider_key)
+        elif (
+            self.speech_provider == SpeechProvider.local
+            and self.speech_service_name != ""
+        ):
+            tts = dependencies[
+                SpeechService.get_resource_name(self.speech_service_name)
+            ]
+            self.tts = cast(SpeechService, tts)
         else:
             self.speech_provider = SpeechProvider.google
 
