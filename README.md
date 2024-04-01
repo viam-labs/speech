@@ -2,7 +2,7 @@
 
 *speech* is a modular service that provides text-to-speech (TTS) and speech-to-text (STT) capabilities for machines running on the Viam platform.
 
-This module implements the [Speech Service API (`viam-labs:service:speech`)](https://github.com/viam-labs/speech-service-api). See the documentation for that service to learn more about using it with the Viam SDKs.
+This module implements the [Speech Service API (`viam-labs:service:speech`)](https://github.com/viam-labs/speech-service-api). See the documentation for that API to learn more about using it with the Viam SDKs.
 
 ## Requirements
 
