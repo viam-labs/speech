@@ -2,7 +2,9 @@ import asyncio
 
 from viam.module.module import Module
 
-from .speech import SpeechIOService, SpeechService
+from speech_service_api import SpeechService
+from .speech import SpeechIOService
+
 
 async def main():
     """This function creates and starts a new module, after adding all desired resources.

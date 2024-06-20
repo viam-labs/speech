@@ -39,8 +39,9 @@ On the new component panel, copy and paste the following attribute template into
 
 ```json
 {
-  "speech_provider": "google|elevenlabs",
+  "speech_provider": "google|elevenlabs|local",
   "speech_provider_key": "<SECRET-KEY>",
+  "speech_service_name": "<service name>",
   "speech_voice": "<VOICE-OPTION>",
   "completion_provider": "openai",
   "completion_model": "gpt-4|gpt-3.5-turbo",
@@ -48,7 +49,7 @@ On the new component panel, copy and paste the following attribute template into
   "completion_provider_key": "<sk-mykey>",
   "completion_persona": "<PERSONA>",
   "listen": true,
-  "listen_provider": "google",
+  "listen_provider": "google|<service name>",
   "listen_trigger_say": "<TRIGGER-PHRASE>",
   "listen_trigger_completion": "<COMPLETION-PHRASE>",
   "listen_trigger_command": "<COMMAND-TO-RETRIEVE-STORED-TEXT>",
@@ -69,8 +70,9 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 
 | Name    | Type   | Inclusion    | Description |
 | ------- | ------ | ------------ | ----------- |
-| `speech_provider` | string | Optional | The speech provider for the voice service: `"google"` or `"elevenlabs"`. Default: `"google"`.  |
+| `speech_provider` | string | Optional | The speech provider for the voice service: `"google"`, `"elevenlabs"`, or `"local"`. Default: `"google"`.  |
 | `speech_provider_key` | string | **Required** | The secret key for the provider - only required for elevenlabs. Default: `""`. |
+| `speech_provider_name` | string | **Required** | The name of the service to provide text-to-speech (TTS) capabilities - only required when `"local"` is set for `speech_provider` field. Default: `""`. |
 | `speech_voice`  | string | Optional | If the speech_provider (example: elevenlabs) provides voice options, you can select the voice here. Default: `"Josh"`. |
 | `completion_provider`  | string | Optional | `"openai"`. Other providers may be supported in the future. [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided. Default: `"openai"`. |
 | `completion_model`  | string | Optional | `gpt-4` or `gpt-3.5-turbo`. Other models may be supported in the future.  [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided. Default: `"gpt-4"`. |
@@ -107,6 +109,26 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 }
 ```
 In the above case, the `listen_provider` and `depends_on` value are set to the name of the configured `viam-labs:speech:stt-vosk` service for the robot config.
+
+\*If the `speech_provider` is another speech service (set to `"local"`), it should be set as a dependency for the "speechio" service. This must be done using the "Raw JSON" editor within the robot configuration by setting the `"depends_on"` field for the service:
+
+```json
+{
+  "name": "speechio",
+  "type": "speech",
+  "namespace": "viam-labs",
+  "model": "viam-labs:speech:speechio",
+  "attributes": {
+    "speech_provider": "local",
+    "speech_service_name": "piper",
+    /* other configuration for the service */
+  },
+  "depends_on": [
+    "piper"
+  ]
+}
+```
+In the above case, the `speech_service_name` and `depends_on` value are set to the name of the configured [`viam-labs:speech:tts-piper` service](https://github.com/viam-labs/tts-piper) for the robot config.
 
 ### Example configuration
 
