@@ -18,6 +18,7 @@ On Linux:
 
 On MacOS, `run.sh` will install the following dependencies using [Homebrew](https://brew.sh) before adding the modular resource:
 
+*** As a note, pyaudio's dependency on portaudio requires python3.11. However, the required package distils is deprecated in this version, so environments will need to install setuptools instead ***
 ``` bash
 brew install portaudio
 ```
