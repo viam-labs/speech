@@ -21,7 +21,7 @@ from pygame import mixer
 from elevenlabs.client import ElevenLabs
 from elevenlabs import save as eleven_save
 from gtts import gTTS
-from openai import AsyncOpenAI
+import openai
 import speech_recognition as sr
 from pydub import AudioSegment
 
@@ -81,7 +81,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
     active_trigger_type: str
     disable_mic: bool
     disable_audioout: bool
-    openai_client: dict = {}
     eleven_client: dict = {}
 
     @classmethod
@@ -114,7 +113,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
             if not os.path.isfile(file):  # read from cache if it exists
                 if self.speech_provider == "elevenlabs":
                     audio = self.eleven_client["client"].generate(text=text, voice=self.speech_voice)
-                    LOGGER.error(audio)
                     eleven_save(audio=audio, filename=file)
                 else:
                     sp = gTTS(text=text, lang="en", slow=False)
@@ -192,7 +190,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
             LOGGER.info("Getting completion...")
             if self.completion_persona != "":
                 text = "As " + self.completion_persona + " respond to '" + text + "'"
-            completion = await self.openai_client["client"].chat.completions.create(
+            completion = openai.chat.completions.create(
                 model=self.completion_model,
                 max_tokens=1024,
                 messages=[{"role": "user", "content": text}],
@@ -260,7 +258,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
 
     def listen_callback(self, recognizer, audio):
         heard = asyncio.run(self.convert_audio_to_text(audio))
-        LOGGER.debug("speechio heard " + heard)
+        LOGGER.error("speechio heard " + heard)
 
         if heard != "":
             if (
@@ -294,7 +292,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
                     rec_state.listen_closer()
 
     async def convert_audio_to_text(self, audio: sr.AudioData) -> str:
-        LOGGER.debug(audio)
 
         if self.stt is not None:
             return await self.stt.to_text(audio.get_wav_data(), format="wav")
@@ -334,10 +331,8 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.completion_provider_org = str(attrs.get("completion_provider_org", ""))
         self.completion_provider_key = str(attrs.get("completion_provider_key", ""))
         if self.completion_provider == "openai":
-            self.openai_client["client"] = AsyncOpenAI(
-                api_key = self.completion_provider_key,
-                organization = self.completion_provider_org
-            )
+            openai.api_key = self.completion_provider_key
+            openai.organization = self.completion_provider_org
         self.completion_persona = str(attrs.get("completion_persona", ""))
         self.listen_provider = str(attrs.get("listen_provider", "google"))
         self.should_listen = bool(attrs.get("listen", False))
@@ -403,7 +398,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
 
             # set up background listening if desired
             if self.should_listen:
-                LOGGER.debug("Will listen in background")
+                LOGGER.error("Will listen in background")
                 rec_state.listen_closer = rec_state.rec.listen_in_background(
                     source=rec_state.mic,
                     phrase_time_limit=self.listen_phrase_time_limit,

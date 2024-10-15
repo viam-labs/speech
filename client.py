@@ -33,12 +33,12 @@ async def main():
     LOGGER.info(f"The robot said '{text}'")
 
     # note: this will fail unless you have a completion provider configured
-    text = await speech.completion("Give me a quote one might say if they were saying 'Good day, friend!'", False)
+    text = await speech.completion("Give me a quote one might say if they were saying 'Good day, friend!'", True)
     LOGGER.info(f"The robot said '{text}'")
 
     # note: this will fail unless you have a completion provider configured
     #text = await speech.completion("Give me a quote one might say regarding this robots resources: " 
-    #                               + str(robot.resource_names) + " using documentation at https://docs.viam.com as reference")
+    #                               + str(robot.resource_names) + " using documentation at https://docs.viam.com as reference", False)
     #LOGGER.info(f"The robot said '{text}'")
 
     is_speaking = await speech.is_speaking()
