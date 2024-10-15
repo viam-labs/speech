@@ -2,6 +2,7 @@
 if ! command -v uv 2>&1 >/dev/null; then
     pip install uv
 fi
+apt install -qqy python3-pyaudio portaudio19-dev alsa-tools alsa-utils flac python3-dev
 uv venv --python 3.12
 source .venv/bin/activate
 uv pip install -r requirements.txt
