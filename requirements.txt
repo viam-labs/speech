@@ -1,9 +1,10 @@
-elevenlabs
-gtts
-pyaudio
-openai
-pygame
-speechrecognition
-viam-sdk
-pydub
+elevenlabs~=1.10.0
+gtts~=2.5.3
+pyaudio~=0.2.14
+openai~=1.51.2
+pygame~=2.6.1
+speechrecognition~=3.10.4
+viam-sdk~=0.31.1
+pydub~=0.25.1
+pyinstaller~=6.10.0
 speech_service_api @ git+https://github.com/viam-labs/speech-service-api.git@v0.4.0

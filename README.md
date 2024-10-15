@@ -73,7 +73,7 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | `speech_provider_key` | string | **Required** | The secret key for the provider - only required for elevenlabs. Default: `""`. |
 | `speech_voice`  | string | Optional | If the speech_provider (example: elevenlabs) provides voice options, you can select the voice here. Default: `"Josh"`. |
 | `completion_provider`  | string | Optional | `"openai"`. Other providers may be supported in the future. [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided. Default: `"openai"`. |
-| `completion_model`  | string | Optional | `gpt-4` or `gpt-3.5-turbo`. Other models may be supported in the future.  [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided. Default: `"gpt-4"`. |
+| `completion_model`  | string | Optional | `gpt-4o`, `gpt-4o-mini`, etc. [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided. Default: `"gpt-4o"`. |
 | `completion_provider_org`  | string | Optional | Your org for the completion provider. Default: `""`. |
 | `completion_provider_key`  | string | Optional | Your key for the completion provider. Default: `""`. |
 | `completion_persona`  | string | Optional | If set, will pass "As <completion_persona> respond to '<completion_text>'" to all completion() requests. Default: `""`. |

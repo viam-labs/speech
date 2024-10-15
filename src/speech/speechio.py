@@ -18,9 +18,10 @@ from viam.utils import struct_to_dict
 
 import pygame
 from pygame import mixer
-import elevenlabs as eleven
+from elevenlabs.client import ElevenLabs
+from elevenlabs import save as eleven_save
 from gtts import gTTS
-import openai
+from openai import AsyncOpenAI
 import speech_recognition as sr
 from pydub import AudioSegment
 
@@ -33,7 +34,7 @@ class SpeechProvider(str, Enum):
 
 
 class CompletionProvider(str, Enum):
-    openaigpt35turbo = "openai"
+    openai = "openai"
 
 
 class Closer(Protocol):
@@ -80,6 +81,8 @@ class SpeechIOService(SpeechService, Reconfigurable):
     active_trigger_type: str
     disable_mic: bool
     disable_audioout: bool
+    openai_client: dict = {}
+    eleven_client: dict = {}
 
     @classmethod
     def new(
@@ -110,8 +113,9 @@ class SpeechIOService(SpeechService, Reconfigurable):
         try:
             if not os.path.isfile(file):  # read from cache if it exists
                 if self.speech_provider == "elevenlabs":
-                    audio = eleven.generate(text=text, voice=self.speech_voice)
-                    eleven.save(audio=audio, filename=file)
+                    audio = self.eleven_client["client"].generate(text=text, voice=self.speech_voice)
+                    LOGGER.error(audio)
+                    eleven_save(audio=audio, filename=file)
                 else:
                     sp = gTTS(text=text, lang="en", slow=False)
                     sp.save(file)
@@ -188,7 +192,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
             LOGGER.info("Getting completion...")
             if self.completion_persona != "":
                 text = "As " + self.completion_persona + " respond to '" + text + "'"
-            completion = await openai.ChatCompletion.acreate(
+            completion = await self.openai_client["client"].chat.completions.create(
                 model=self.completion_model,
                 max_tokens=1024,
                 messages=[{"role": "user", "content": text}],
@@ -246,7 +250,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
 
     async def to_speech(self, text):
         if self.speech_provider == "elevenlabs":
-            audio = eleven.generate(text=text, voice=self.speech_voice)
+            audio = self.eleven_client["client"].generate(text=text, voice=self.speech_voice)
             return audio
         else:
             mp3_fp = BytesIO()
@@ -324,11 +328,16 @@ class SpeechIOService(SpeechService, Reconfigurable):
         self.speech_provider_key = str(attrs.get("speech_provider_key", ""))
         self.speech_voice = str(attrs.get("speech_voice", "Josh"))
         self.completion_provider = CompletionProvider[
-            str(attrs.get("completion_provider", "openaigpt35turbo"))
+            str(attrs.get("completion_provider", "openai"))
         ]
-        self.completion_model = str(attrs.get("completion_model", "gpt-4"))
+        self.completion_model = str(attrs.get("completion_model", "gpt-4o"))
         self.completion_provider_org = str(attrs.get("completion_provider_org", ""))
         self.completion_provider_key = str(attrs.get("completion_provider_key", ""))
+        if self.completion_provider == "openai":
+            self.openai_client["client"] = AsyncOpenAI(
+                api_key = self.completion_provider_key,
+                organization = self.completion_provider_org
+            )
         self.completion_persona = str(attrs.get("completion_persona", ""))
         self.listen_provider = str(attrs.get("listen_provider", "google"))
         self.should_listen = bool(attrs.get("listen", False))
@@ -356,14 +365,11 @@ class SpeechIOService(SpeechService, Reconfigurable):
             self.speech_provider == SpeechProvider.elevenlabs
             and self.speech_provider_key != ""
         ):
-            eleven.set_api_key(self.speech_provider_key)
+            self.eleven_client["client"] = ElevenLabs(
+                api_key = self.speech_provider_key
+            )
         else:
             self.speech_provider = SpeechProvider.google
-
-        if self.completion_provider_org:
-            openai.organization = self.completion_provider_org
-        if self.completion_provider_key:
-            openai.api_key = self.completion_provider_key
 
         if self.listen_provider != "google":
             stt = dependencies[SpeechService.get_resource_name(self.listen_provider)]
