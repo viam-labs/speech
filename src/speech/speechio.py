@@ -52,6 +52,7 @@ CACHEDIR = "/tmp/cache"
 
 rec_state = RecState()
 
+
 class SpeechIOService(SpeechService, Reconfigurable):
     """This is the specific implementation of a ``SpeechService`` (defined in api.py)
 
@@ -90,7 +91,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
         speechio = cls(config.name)
         speechio.reconfigure(config, dependencies)
 
-        LOGGER.debug(json.dumps(speechio.__dict__))
         return speechio
 
     async def say(self, text: str, blocking: bool, cache_only: bool = False) -> str:
@@ -112,7 +112,9 @@ class SpeechIOService(SpeechService, Reconfigurable):
         try:
             if not os.path.isfile(file):  # read from cache if it exists
                 if self.speech_provider == "elevenlabs":
-                    audio = self.eleven_client["client"].generate(text=text, voice=self.speech_voice)
+                    audio = self.eleven_client["client"].generate(
+                        text=text, voice=self.speech_voice
+                    )
                     eleven_save(audio=audio, filename=file)
                 else:
                     sp = gTTS(text=text, lang="en", slow=False)
@@ -128,7 +130,8 @@ class SpeechIOService(SpeechService, Reconfigurable):
                         pygame.time.Clock().tick()
 
                 LOGGER.info("Played audio...")
-        except RuntimeError:
+        except RuntimeError as err:
+            LOGGER.error(err)
             raise ValueError("say() speech failure")
 
         return text
@@ -248,7 +251,9 @@ class SpeechIOService(SpeechService, Reconfigurable):
 
     async def to_speech(self, text):
         if self.speech_provider == "elevenlabs":
-            audio = self.eleven_client["client"].generate(text=text, voice=self.speech_voice)
+            audio = self.eleven_client["client"].generate(
+                text=text, voice=self.speech_voice
+            )
             return audio
         else:
             mp3_fp = BytesIO()
@@ -360,9 +365,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
             self.speech_provider == SpeechProvider.elevenlabs
             and self.speech_provider_key != ""
         ):
-            self.eleven_client["client"] = ElevenLabs(
-                api_key = self.speech_provider_key
-            )
+            self.eleven_client["client"] = ElevenLabs(api_key=self.speech_provider_key)
         else:
             self.speech_provider = SpeechProvider.google
 
@@ -372,7 +375,11 @@ class SpeechIOService(SpeechService, Reconfigurable):
 
         if not self.disable_audioout:
             if not mixer.get_init():
-                mixer.init(buffer=1024)
+                try:
+                    mixer.init(buffer=1024)
+                except Exception as err:
+                    os.environ["PULSE_SERVER"] = "/run/user/1000/pulse/native"
+                    mixer.init(buffer=1024)
         else:
             if mixer.get_init():
                 mixer.quit()
