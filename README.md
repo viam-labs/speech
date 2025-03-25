@@ -126,6 +126,36 @@ The following configuration sets up listening mode with local speech-to-text, us
 }
 ```
 
+## Configure the `discovery service`
+
+This service queries the device for available microphone devices to be used for text-to-speech services.
+
+The output from this discovery can be used to configure a `viam-labs:speech:speechio` service.
+
+If an expected device doesn't appear, try following the troubleshooting steps in the module README.
+
+### Configuration
+The following attribute template can be used to configure this model:
+
+```json
+{
+}
+```
+
+#### Attributes
+
+The following attributes are available for this model:
+
+| Name          | Type   | Inclusion | Description                |
+|---------------|--------|-----------|----------------------------|
+
+#### Example Configuration
+
+```json
+{
+}
+```
+
 ## Troubleshooting
 
 When using a USB audio device, it may sometimes come up as the default, sometimes not.

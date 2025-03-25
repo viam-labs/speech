@@ -9,6 +9,12 @@
       "model": "viam-labs:speech:speechio",
       "markdown_link": "README.md#configure-your-speech-service",
       "short_description": "Provides text-to-speech (TTS) and speech-to-text(STT) capabilities"
+    },
+    {
+      "api": "rdk:service:discovery",
+      "model": "viam-labs:speech:discovery-mics",
+      "markdown_link": "README.md#configure-the-discovery-service",
+      "short_description": "Find all available microphones to use for speech-to-text services"
     }
   ],
   "build": {

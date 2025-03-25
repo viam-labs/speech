@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import ClassVar, Mapping, Optional, Protocol, cast
+from typing import ClassVar, Mapping, Optional, Protocol, Sequence, cast
 from enum import Enum
 import os
 import re
@@ -7,10 +7,10 @@ import asyncio
 import hashlib
 from typing_extensions import Self
 
-from viam.module.types import Reconfigurable
 from viam.proto.app.robot import ComponentConfig
 from viam.proto.common import ResourceName
 from viam.resource.base import ResourceBase
+from viam.resource.easy_resource import EasyResource
 from viam.resource.types import Model
 from viam.logging import getLogger
 from viam.utils import struct_to_dict
@@ -52,7 +52,7 @@ CACHEDIR = "/tmp/cache"
 rec_state = RecState()
 
 
-class SpeechIOService(SpeechService, Reconfigurable):
+class SpeechIOService(SpeechService, EasyResource):
     """This is the specific implementation of a ``SpeechService`` (defined in api.py)
 
     It inherits from SpeechService, as well as conforms to the ``Reconfigurable`` protocol, which signifies that this component can be
@@ -87,16 +87,26 @@ class SpeechIOService(SpeechService, Reconfigurable):
     def new(
         cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]
     ) -> Self:
-        speechio = cls(config.name)
-        speechio.reconfigure(config, dependencies)
+        return super().new(config, dependencies)
 
-        return speechio
+    @classmethod
+    def validate_config(cls, config: ComponentConfig) -> Sequence[str]:
+        """This method allows you to validate the configuration object received from the machine,
+        as well as to return any implicit dependencies based on that `config`.
+
+        Args:
+            config (ComponentConfig): The configuration for this resource
+
+        Returns:
+            Sequence[str]: A list of implicit dependencies
+        """
+        return []
 
     async def say(self, text: str, blocking: bool, cache_only: bool = False) -> str:
         if str == "":
             raise ValueError("No text provided")
 
-        LOGGER.info("Generating audio...")
+        LOGGER.debug("Generating audio...")
         if not os.path.isdir(CACHEDIR):
             os.mkdir(CACHEDIR)
 
@@ -121,14 +131,14 @@ class SpeechIOService(SpeechService, Reconfigurable):
 
             if not cache_only:
                 mixer.music.load(file)
-                LOGGER.info("Playing audio...")
+                LOGGER.debug("Playing audio...")
                 mixer.music.play()  # Play it
 
                 if blocking:
                     while mixer.music.get_busy():
                         pygame.time.Clock().tick()
 
-                LOGGER.info("Played audio...")
+                LOGGER.debug("Played audio...")
         except RuntimeError as err:
             LOGGER.error(err)
             raise ValueError("say() speech failure")
@@ -178,18 +188,18 @@ class SpeechIOService(SpeechService, Reconfigurable):
             + ".txt",
         )
         if not cache_only and (self.cache_ahead_completions):
-            LOGGER.info("Will try to read completion from cache")
+            LOGGER.debug("Will try to read completion from cache")
             if os.path.isfile(file):
-                LOGGER.info("Cache file exists")
+                LOGGER.debug("Cache file exists")
                 with open(file) as f:
                     completion = f.read()
-                LOGGER.info(completion)
+                LOGGER.debug(completion)
 
             # now cache next one
             asyncio.ensure_future(self.completion(text, blocking, True))
 
         if completion == "":
-            LOGGER.info("Getting completion...")
+            LOGGER.debug("Getting completion...")
             if self.completion_persona != "":
                 text = "As " + self.completion_persona + " respond to '" + text + "'"
             completion = openai.chat.completions.create(
@@ -200,7 +210,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
             completion = completion.choices[0].message.content
             completion = re.sub("[^0-9a-zA-Z.!?,:'/ ]+", "", completion).lower()
             completion = completion.replace("as an ai language model", "")
-            LOGGER.info("Got completion...")
+            LOGGER.debug("Got completion...")
 
         if cache_only:
             with open(file, "w") as f:
@@ -211,7 +221,7 @@ class SpeechIOService(SpeechService, Reconfigurable):
         return completion
 
     async def get_commands(self, number: int) -> list:
-        LOGGER.info("will get " + str(number) + " commands from command list")
+        LOGGER.debug("will get " + str(number) + " commands from command list")
         to_return = self.command_list[0:number]
         LOGGER.debug("to return from command_list: " + str(to_return))
         del self.command_list[0:number]
@@ -296,7 +306,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
                     rec_state.listen_closer()
 
     async def convert_audio_to_text(self, audio: sr.AudioData) -> str:
-
         if self.stt is not None:
             return await self.stt.to_text(audio.get_wav_data(), format="wav")
 
@@ -392,7 +401,6 @@ class SpeechIOService(SpeechService, Reconfigurable):
             rec_state.rec.dynamic_energy_threshold = True
 
             mics = sr.Microphone.list_microphone_names()
-            LOGGER.info(mics)
 
             if self.mic_device_name != "":
                 rec_state.mic = sr.Microphone(mics.index(self.mic_device_name))
