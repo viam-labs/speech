@@ -8,7 +8,7 @@ This module implements the [Speech Service API (`viam-labs:service:speech`)](htt
 
 On Linux:
 
-`run.sh` will automatically install the following system dependencies if not already set up on the machine:
+`build.sh` will automatically include the following system dependencies as part of the PyInstaller executable:
 
 - `python3-pyaudio`
 - `portaudio19-dev`
@@ -16,7 +16,7 @@ On Linux:
 - `alsa-utils`
 - `flac`
 
-On MacOS, `run.sh` will install the following dependencies using [Homebrew](https://brew.sh) before adding the modular resource:
+On MacOS, `build.sh` will include the following dependencies using [Homebrew](https://brew.sh):
 
 ``` bash
 brew install portaudio
