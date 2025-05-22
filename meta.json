@@ -12,7 +12,7 @@
     },
     {
       "api": "rdk:service:discovery",
-      "model": "viam-labs:speech:discovery-mics",
+      "model": "viam-labs:speech:discover-mics",
       "markdown_link": "README.md#configure-the-discovery-service",
       "short_description": "Find all available microphones to use for speech-to-text services"
     }
