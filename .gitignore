@@ -166,3 +166,7 @@ appimage-build
 *.AppImage*
 viam-env
 .installed
+
+test.py
+example.mp3
+example.wav

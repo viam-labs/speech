@@ -48,7 +48,7 @@ On the new component panel, copy and paste the following attribute template into
   "completion_provider_key": "<sk-mykey>",
   "completion_persona": "<PERSONA>",
   "listen": true,
-  "listen_provider": "google",
+  "stt_provider": "google",
   "listen_trigger_say": "<TRIGGER-PHRASE>",
   "listen_trigger_completion": "<COMPLETION-PHRASE>",
   "listen_trigger_command": "<COMMAND-TO-RETRIEVE-STORED-TEXT>",
@@ -78,7 +78,7 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | `completion_provider_key`  | string | Optional | Your key for the completion provider. Default: `""`. |
 | `completion_persona`  | string | Optional | If set, will pass "As <completion_persona> respond to '<completion_text>'" to all completion() requests. Default: `""`. |
 | `listen`  | boolean | Optional | If set to true and the robot as an available microphone device, will enable listening in the background.<br><br>If enabled, it will respond to configured [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command), based on input audio being converted to text.<br><br>If *listen* is enabled and [listen_triggers_active](#listen_triggers_active) is disabled, triggers will occur when [listen_trigger](#listen_trigger) is called.<br><br>Note that background (ambient) noise and microphone quality are important factors in the quality of the STT conversion.<br><br>Currently, Google STT is leveraged. Default: `false`. |
-| `listen_provider`  | string | Optional | This can be set to the name of a configured speech service that provides `to_text` and `listen` commands, like [`stt-vosk`](https://app.viam.com/module/viam-labs/stt-vosk)\*. Otherwise, the Google STT API will be used. Default: `"google"`. |
+| `stt_provider`  | string | Optional | This can be set to the name of a configured speech service that provides a `to_text` command, like [`stt-vosk`](https://app.viam.com/module/viam-labs/stt-vosk)\*. Otherwise, the Google STT API will be used. Default: `"google"`. |
 | `listen_phrase_time_limit`  | float | Optional | The maximum number of seconds that this will allow a phrase to continue before stopping and returning the part of the phrase processed before the time limit was reached.<br><br>The resulting audio will be the phrase cut off at the time limit.<br><br>If phrase_timeout is None, there will be no phrase time limit.<br><br>Note: if you are seeing instance where phrases are not being returned for much longer than you expect, try changing this to ~5 or so. Default: `None`. |
 | `listen_trigger_say`  | string | Optional | If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_say* will be converted to speech and repeated back by the robot. Default: `"robot say"`. |
 | `listen_trigger_completion`  | string | Optional | If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_completion* will be sent to the completion provider (if configured), converted to speech, and repeated back by the robot. Default: `"hey robot"`. |
@@ -89,24 +89,6 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | `disable_mic`  | boolean | Optional | If true, will not configure any listening capabilities. This must be set to true if you do not have a valid microphone attached to your system. Default: `false`. |
 | `disable_audioout`  | boolean | Optional | If true, will not configure any audio output capabilities. This must be set to true if you do not have a valid audio output device attached to your system. Default: `false`. |
 
-\*If the `listen_provider` is another speech service, it should be set as a dependency for the "speechio" service. This must be done using the "Raw JSON" editor within the robot configuration by setting the `"depends_on"` field for the service:
-
-```json
-{
-  "name": "speechio",
-  "type": "speech",
-  "namespace": "viam-labs",
-  "model": "viam-labs:speech:speechio",
-  "attributes": {
-    "listen_provider": "vosk",
-    /* other configuration for the service */
-  },
-  "depends_on": [
-    "vosk"
-  ]
-}
-```
-In the above case, the `listen_provider` and `depends_on` value are set to the name of the configured `viam-labs:speech:stt-vosk` service for the robot config.
 
 ### Example configuration
 
@@ -118,7 +100,7 @@ The following configuration sets up listening mode with local speech-to-text, us
   "completion_provider_key": "sk-mykey",
   "completion_persona": "Gollum",
   "listen": true,
-  "listen_provider": "stt",
+  "stt_provider": "google",
   "speech_provider": "elevenlabs",
   "speech_provider_key": "keygoeshere",
   "speech_voice": "Antoni",

@@ -12,7 +12,6 @@ from viam.proto.common import ResourceName
 from viam.resource.base import ResourceBase
 from viam.resource.easy_resource import EasyResource
 from viam.resource.types import Model
-from viam.logging import getLogger
 from viam.utils import struct_to_dict
 
 import pygame
@@ -46,7 +45,6 @@ class RecState:
     rec: Optional[sr.Recognizer] = None
 
 
-LOGGER = getLogger(__name__)
 CACHEDIR = "/tmp/cache"
 
 rec_state = RecState()
@@ -70,7 +68,7 @@ class SpeechIOService(SpeechService, EasyResource):
     completion_provider_key: str
     completion_persona: str
     should_listen: bool
-    listen_provider: str
+    stt_provider: str
     listen_trigger_say: str
     listen_trigger_completion: str
     listen_trigger_command: str
@@ -82,6 +80,7 @@ class SpeechIOService(SpeechService, EasyResource):
     disable_mic: bool
     disable_audioout: bool
     eleven_client: dict = {}
+    main_loop: Optional[asyncio.AbstractEventLoop] = None
 
     @classmethod
     def new(
@@ -100,13 +99,18 @@ class SpeechIOService(SpeechService, EasyResource):
         Returns:
             Sequence[str]: A list of implicit dependencies
         """
-        return []
+        deps = []
+        attrs = struct_to_dict(config.attributes)
+        stt_provider = str(attrs.get("stt_provider", ""))
+        if stt_provider != "" and stt_provider != "google":
+            deps.append(stt_provider)
+        return deps
 
     async def say(self, text: str, blocking: bool, cache_only: bool = False) -> str:
         if str == "":
             raise ValueError("No text provided")
 
-        LOGGER.debug("Generating audio...")
+        self.logger.debug("Generating audio...")
         if not os.path.isdir(CACHEDIR):
             os.mkdir(CACHEDIR)
 
@@ -131,16 +135,16 @@ class SpeechIOService(SpeechService, EasyResource):
 
             if not cache_only:
                 mixer.music.load(file)
-                LOGGER.debug("Playing audio...")
+                self.logger.debug("Playing audio...")
                 mixer.music.play()  # Play it
 
                 if blocking:
                     while mixer.music.get_busy():
                         pygame.time.Clock().tick()
 
-                LOGGER.debug("Played audio...")
+                self.logger.debug("Played audio...")
         except RuntimeError as err:
-            LOGGER.error(err)
+            self.logger.error(err)
             raise ValueError("say() speech failure")
 
         return text
@@ -188,18 +192,18 @@ class SpeechIOService(SpeechService, EasyResource):
             + ".txt",
         )
         if not cache_only and (self.cache_ahead_completions):
-            LOGGER.debug("Will try to read completion from cache")
+            self.logger.debug("Will try to read completion from cache")
             if os.path.isfile(file):
-                LOGGER.debug("Cache file exists")
+                self.logger.debug("Cache file exists")
                 with open(file) as f:
                     completion = f.read()
-                LOGGER.debug(completion)
+                self.logger.debug(completion)
 
             # now cache next one
             asyncio.ensure_future(self.completion(text, blocking, True))
 
         if completion == "":
-            LOGGER.debug("Getting completion...")
+            self.logger.debug("Getting completion...")
             if self.completion_persona != "":
                 text = "As " + self.completion_persona + " respond to '" + text + "'"
             completion = openai.chat.completions.create(
@@ -210,7 +214,7 @@ class SpeechIOService(SpeechService, EasyResource):
             completion = completion.choices[0].message.content
             completion = re.sub("[^0-9a-zA-Z.!?,:'/ ]+", "", completion).lower()
             completion = completion.replace("as an ai language model", "")
-            LOGGER.debug("Got completion...")
+            self.logger.debug("Got completion...")
 
         if cache_only:
             with open(file, "w") as f:
@@ -221,29 +225,29 @@ class SpeechIOService(SpeechService, EasyResource):
         return completion
 
     async def get_commands(self, number: int) -> list:
-        LOGGER.debug("will get " + str(number) + " commands from command list")
+        self.logger.debug("will get " + str(number) + " commands from command list")
         to_return = self.command_list[0:number]
-        LOGGER.debug("to return from command_list: " + str(to_return))
+        self.logger.debug("to return from command_list: " + str(to_return))
         del self.command_list[0:number]
         return to_return
 
     async def listen(self) -> str:
-        if self.stt is not None:
-            return await self.stt.listen()
-
         if rec_state.rec is not None and rec_state.mic is not None:
             with rec_state.mic as source:
                 audio = rec_state.rec.listen(source)
             return await self.convert_audio_to_text(audio)
 
-        LOGGER.debug("Nothing to listen to")
+        self.logger.debug("Nothing to listen to")
         return ""
 
     async def to_text(self, speech: bytes, format: str = "mp3"):
         if self.stt is not None:
+            self.logger.info("using stt provider")
             return await self.stt.to_text(speech, format)
 
+        self.logger.info("using google stt")
         if rec_state.rec is not None:
+            self.logger.info("rec_state.rec is not None")
             # speech_recognition expects WAV so we need to convert mp3
             sound_out = BytesIO(speech)
 
@@ -253,6 +257,7 @@ class SpeechIOService(SpeechService, EasyResource):
                 sound.export(sound_out, format=format)
 
             with sr.AudioFile(sound_out) as source:
+                self.logger.info("recording audio")
                 audio = rec_state.rec.record(source)
             return await self.convert_audio_to_text(audio)
 
@@ -271,57 +276,81 @@ class SpeechIOService(SpeechService, EasyResource):
             return mp3_fp.getvalue()
 
     def listen_callback(self, recognizer, audio):
-        heard = asyncio.run(self.convert_audio_to_text(audio))
-        LOGGER.error("speechio heard " + heard)
+        self.logger.info("speechio heard audio")
+
+        if not self.main_loop or not self.main_loop.is_running():
+            self.logger.error("Main event loop is not available for STT task.")
+            return
+
+        future = asyncio.run_coroutine_threadsafe(
+            self.convert_audio_to_text(audio), self.main_loop
+        )
+        try:
+            heard = future.result(timeout=15)
+        except Exception as e:
+            self.logger.error(f"STT task failed: {e}")
+            return
+
+        self.logger.info("speechio heard " + heard)
 
         if heard != "":
             if (
                 self.should_listen and re.search(".*" + self.listen_trigger_say, heard)
             ) or (self.trigger_active and self.active_trigger_type == "say"):
                 self.trigger_active = False
-                to_say = re.sub(".*" + self.listen_trigger_say + "\s+", "", heard)
-                asyncio.run(self.say(to_say, blocking=False))
+                to_say = re.sub(".*" + self.listen_trigger_say + r"\s+", "", heard)
+                asyncio.run_coroutine_threadsafe(
+                    self.say(to_say, blocking=False), self.main_loop
+                )
             elif (
                 self.should_listen
                 and re.search(".*" + self.listen_trigger_completion, heard)
             ) or (self.trigger_active and self.active_trigger_type == "completion"):
                 self.trigger_active = False
                 to_say = re.sub(
-                    ".*" + self.listen_trigger_completion + "\s+", "", heard
+                    ".*" + self.listen_trigger_completion + r"\s+", "", heard
                 )
-                asyncio.run(self.completion(to_say, blocking=False))
+                asyncio.run_coroutine_threadsafe(
+                    self.completion(to_say, blocking=False), self.main_loop
+                )
             elif (
                 self.should_listen
                 and re.search(".*" + self.listen_trigger_command, heard)
             ) or (self.trigger_active and self.active_trigger_type == "command"):
                 self.trigger_active = False
-                command = re.sub(".*" + self.listen_trigger_command + "\s+", "", heard)
+                command = re.sub(".*" + self.listen_trigger_command + r"\s+", "", heard)
                 self.command_list.insert(0, command)
-                LOGGER.debug("added to command_list: '" + command + "'")
+                self.logger.debug("added to command_list: '" + command + "'")
                 del self.command_list[self.listen_command_buffer_length :]
             if not self.should_listen:
                 # stop listening if not in background listening mode
-                LOGGER.debug("will close background listener")
+                self.logger.debug("will close background listener")
                 if rec_state.listen_closer is not None:
                     rec_state.listen_closer()
 
     async def convert_audio_to_text(self, audio: sr.AudioData) -> str:
         if self.stt is not None:
-            return await self.stt.to_text(audio.get_wav_data(), format="wav")
+            self.logger.info("getting wav data")
+            audio_data = audio.get_wav_data()
+            self.logger.info("using stt provider")
+            return await self.stt.to_text(audio_data, format="wav")
 
         heard = ""
 
         try:
+            self.logger.info("will convert audio to text")
             # for testing purposes, we're just using the default API key
             # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
             # instead of `r.recognize_google(audio)`
             transcript = rec_state.rec.recognize_google(audio, show_all=True)
+            self.logger.info("transcript: " + str(transcript))
             if type(transcript) is dict and transcript.get("alternative"):
                 heard = transcript["alternative"][0]["transcript"]
+                self.logger.info("heard: " + heard)
         except sr.UnknownValueError:
-            LOGGER.warn("Google Speech Recognition could not understand audio")
+            self.logger.warning("Google Speech Recognition could not understand audio")
         except sr.RequestError as e:
-            LOGGER.warn(
+            self.logger.warning(
                 "Could not request results from Google Speech Recognition service; {0}".format(
                     e
                 )
@@ -331,6 +360,12 @@ class SpeechIOService(SpeechService, EasyResource):
     def reconfigure(
         self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]
     ):
+        try:
+            self.main_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self.main_loop = None
+            self.logger.error("Could not get running event loop in reconfigure.")
+
         attrs = struct_to_dict(config.attributes)
         self.speech_provider = SpeechProvider[
             str(attrs.get("speech_provider", "google"))
@@ -347,7 +382,7 @@ class SpeechIOService(SpeechService, EasyResource):
             openai.api_key = self.completion_provider_key
             openai.organization = self.completion_provider_org
         self.completion_persona = str(attrs.get("completion_persona", ""))
-        self.listen_provider = str(attrs.get("listen_provider", "google"))
+        self.stt_provider = str(attrs.get("stt_provider", "google"))
         self.should_listen = bool(attrs.get("listen", False))
         self.listen_phrase_time_limit = attrs.get("listen_phrase_time_limit", None)
         self.mic_device_name = str(attrs.get("mic_device_name", ""))
@@ -377,8 +412,8 @@ class SpeechIOService(SpeechService, EasyResource):
         else:
             self.speech_provider = SpeechProvider.google
 
-        if self.listen_provider != "google":
-            stt = dependencies[SpeechService.get_resource_name(self.listen_provider)]
+        if self.stt_provider != "google":
+            stt = dependencies[SpeechService.get_resource_name(self.stt_provider)]
             self.stt = cast(SpeechService, stt)
 
         if not self.disable_audioout:
@@ -412,7 +447,7 @@ class SpeechIOService(SpeechService, EasyResource):
 
             # set up background listening if desired
             if self.should_listen:
-                LOGGER.error("Will listen in background")
+                self.logger.info("Will listen in background")
                 rec_state.listen_closer = rec_state.rec.listen_in_background(
                     source=rec_state.mic,
                     phrase_time_limit=self.listen_phrase_time_limit,
