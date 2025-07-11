@@ -248,18 +248,43 @@ class SpeechIOService(SpeechService, EasyResource):
         self.logger.info("using google stt")
         if rec_state.rec is not None:
             self.logger.info("rec_state.rec is not None")
-            # speech_recognition expects WAV so we need to convert mp3
-            sound_out = BytesIO(speech)
-
-            if format != "wav":
-                sound = AudioSegment.from_mp3(sound_out)
-                sound_out = BytesIO()
-                sound.export(sound_out, format=format)
-
-            with sr.AudioFile(sound_out) as source:
-                self.logger.info("recording audio")
-                audio = rec_state.rec.record(source)
-            return await self.convert_audio_to_text(audio)
+            
+            # Use temporary file for speech_recognition
+            import tempfile
+            import os
+            
+            try:
+                # Create temporary file with proper extension
+                with tempfile.NamedTemporaryFile(delete=False, suffix=f".{format}") as temp_file:
+                    temp_file.write(speech)
+                    temp_file_path = temp_file.name
+                
+                try:
+                    # Convert to WAV if needed
+                    if format != "wav":
+                        self.logger.info(f"Converting {format} to WAV")
+                        sound = AudioSegment.from_file(temp_file_path, format=format)
+                        wav_path = temp_file_path.replace(f".{format}", ".wav")
+                        sound.export(wav_path, format="wav")
+                        os.unlink(temp_file_path)  # Remove original file
+                        temp_file_path = wav_path
+                    
+                    # Use AudioData.from_file() to create AudioData directly from file
+                    audio = sr.AudioData.from_file(temp_file_path)
+                    self.logger.info(f"Created AudioData from file: {len(audio.frame_data)} bytes, {audio.sample_rate}Hz")
+                    
+                    return await self.convert_audio_to_text(audio)
+                    
+                finally:
+                    # Clean up temporary file
+                    try:
+                        os.unlink(temp_file_path)
+                    except:
+                        pass
+                        
+            except Exception as e:
+                self.logger.error(f"Error processing audio: {e}")
+                return ""
 
         return ""
 
