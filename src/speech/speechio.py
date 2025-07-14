@@ -357,7 +357,7 @@ class SpeechIOService(SpeechService, EasyResource):
                 del self.command_list[self.listen_command_buffer_length :]
 
     def vosk_vad_thread(self):
-        """Vosk VAD thread for better voice activity detection"""
+        """Vosk VAD thread for voice activity detection"""
         try:
             p = pyaudio.PyAudio()
             stream = p.open(
@@ -440,7 +440,7 @@ class SpeechIOService(SpeechService, EasyResource):
             rec_state.vosk_thread = threading.Thread(target=self.vosk_vad_thread, daemon=True)
             rec_state.vosk_thread.start()
             
-            self.logger.info("Started Vosk VAD for better voice activity detection")
+            self.logger.info("Started Vosk VAD for voice activity detection")
             return True
             
         except Exception as e:
