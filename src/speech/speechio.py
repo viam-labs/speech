@@ -5,6 +5,11 @@ import os
 import re
 import asyncio
 import hashlib
+import wave
+import threading
+import pyaudio
+import json
+import time
 from typing_extensions import Self
 
 from viam.proto.app.robot import ComponentConfig
@@ -22,6 +27,12 @@ from gtts import gTTS
 import openai
 import speech_recognition as sr
 from pydub import AudioSegment
+
+try:
+    import vosk
+    VOSK_AVAILABLE = True
+except ImportError:
+    VOSK_AVAILABLE = False
 
 from speech_service_api import SpeechService
 
@@ -43,6 +54,12 @@ class RecState:
     listen_closer: Optional[Closer] = None
     mic: Optional[sr.Microphone] = None
     rec: Optional[sr.Recognizer] = None
+    # Vosk VAD components
+    vosk_model: Optional[object] = None
+    vosk_rec: Optional[object] = None
+    vosk_stream: Optional[object] = None
+    vosk_thread: Optional[threading.Thread] = None
+    vosk_stop_event: Optional[threading.Event] = None
 
 
 CACHEDIR = "/tmp/cache"
@@ -300,6 +317,182 @@ class SpeechIOService(SpeechService, EasyResource):
             sp.write_to_fp(mp3_fp)
             return mp3_fp.getvalue()
 
+    def vosk_vad_callback(self, text: str):
+        """Callback for Vosk VAD when speech is detected"""
+        self.logger.info(f"Vosk VAD detected speech: '{text}'")
+        
+        if not self.main_loop or not self.main_loop.is_running():
+            self.logger.error("Main event loop is not available for Vosk VAD task.")
+            return
+
+        # Process the detected speech similar to the regular callback
+        if text != "":
+            if (
+                self.should_listen and re.search(".*" + self.listen_trigger_say, text)
+            ) or (self.trigger_active and self.active_trigger_type == "say"):
+                self.trigger_active = False
+                to_say = re.sub(".*" + self.listen_trigger_say + r"\s+", "", text)
+                asyncio.run_coroutine_threadsafe(
+                    self.say(to_say, blocking=False), self.main_loop
+                )
+            elif (
+                self.should_listen
+                and re.search(".*" + self.listen_trigger_completion, text)
+            ) or (self.trigger_active and self.active_trigger_type == "completion"):
+                self.trigger_active = False
+                to_say = re.sub(
+                    ".*" + self.listen_trigger_completion + r"\s+", "", text
+                )
+                asyncio.run_coroutine_threadsafe(
+                    self.completion(to_say, blocking=False), self.main_loop
+                )
+            elif (
+                self.should_listen
+                and re.search(".*" + self.listen_trigger_command, text)
+            ) or (self.trigger_active and self.active_trigger_type == "command"):
+                self.trigger_active = False
+                command = re.sub(".*" + self.listen_trigger_command + r"\s+", "", text)
+                self.command_list.insert(0, command)
+                self.logger.debug("added to command_list: '" + command + "'")
+                del self.command_list[self.listen_command_buffer_length :]
+
+    def vosk_vad_thread(self):
+        """Vosk VAD thread for better voice activity detection"""
+        try:
+            p = pyaudio.PyAudio()
+            stream = p.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=16000,
+                input=True,
+                frames_per_buffer=8000
+            )
+            
+            rec_state.vosk_stream = stream
+            
+            # Track phrase timing for Vosk VAD
+            phrase_start_time = None
+            phrase_time_limit = self.listen_phrase_time_limit
+            
+            while not rec_state.vosk_stop_event.is_set():
+                try:
+                    data = stream.read(4000, exception_on_overflow=False)
+                    
+                    # Check if we have speech activity
+                    if rec_state.vosk_rec.AcceptWaveform(data):
+                        result = json.loads(rec_state.vosk_rec.Result())
+                        if result.get('text', '').strip():
+                            # Speech detected
+                            if phrase_start_time is None:
+                                phrase_start_time = time.time()
+                                self.logger.debug("Vosk VAD: Phrase started")
+                            
+                            # Check phrase time limit
+                            if phrase_time_limit and phrase_start_time:
+                                elapsed_time = time.time() - phrase_start_time
+                                if elapsed_time >= phrase_time_limit:
+                                    self.logger.debug(f"Vosk VAD: Phrase time limit reached ({elapsed_time:.1f}s)")
+                                    # Reset for next phrase
+                                    phrase_start_time = None
+                                    continue
+                            
+                            self.vosk_vad_callback(result['text'])
+                        else:
+                            # No speech detected, reset phrase timing
+                            if phrase_start_time is not None:
+                                self.logger.debug("Vosk VAD: Phrase ended (no speech)")
+                                phrase_start_time = None
+                                
+                except Exception as e:
+                    self.logger.error(f"Vosk VAD error: {e}")
+                    break
+                    
+        except Exception as e:
+            self.logger.error(f"Vosk VAD thread error: {e}")
+        finally:
+            if rec_state.vosk_stream:
+                rec_state.vosk_stream.close()
+            if p:
+                p.terminate()
+
+    def start_vosk_vad(self):
+        """Start Vosk VAD if available"""
+        if not VOSK_AVAILABLE:
+            self.logger.warning("Vosk not available, falling back to speech_recognition VAD")
+            return False
+            
+        try:
+            # Try to load a small Vosk model for VAD
+            # You can download models from https://alphacephei.com/vosk/models
+            model_path = os.path.expanduser("~/vosk-model-small-en-us-0.15")
+            if not os.path.exists(model_path):
+                self.logger.info("Vosk model not found, attempting to download...")
+                if self.download_vosk_model():
+                    self.logger.info("Successfully downloaded Vosk model")
+                else:
+                    self.logger.warning("Failed to download Vosk model, falling back to speech_recognition VAD")
+                    return False
+                
+            rec_state.vosk_model = vosk.Model(model_path)
+            rec_state.vosk_rec = vosk.KaldiRecognizer(rec_state.vosk_model, 16000)
+            rec_state.vosk_stop_event = threading.Event()
+            
+            rec_state.vosk_thread = threading.Thread(target=self.vosk_vad_thread, daemon=True)
+            rec_state.vosk_thread.start()
+            
+            self.logger.info("Started Vosk VAD for better voice activity detection")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to start Vosk VAD: {e}")
+            return False
+
+    def download_vosk_model(self):
+        """Download Vosk model automatically"""
+        try:
+            import urllib.request
+            import zipfile
+            import shutil
+            
+            model_name = "vosk-model-small-en-us-0.15"
+            model_url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+            model_path = os.path.expanduser(f"~/{model_name}")
+            zip_path = os.path.expanduser(f"~/{model_name}.zip")
+            
+            self.logger.info(f"Downloading Vosk model from {model_url}")
+            
+            # Download the model
+            urllib.request.urlretrieve(model_url, zip_path)
+            
+            # Extract the model
+            self.logger.info("Extracting Vosk model...")
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(os.path.expanduser("~/"))
+            
+            # Clean up zip file
+            os.remove(zip_path)
+            
+            # Verify the model was extracted correctly
+            if os.path.exists(model_path):
+                self.logger.info(f"Vosk model downloaded successfully to {model_path}")
+                return True
+            else:
+                self.logger.error("Failed to extract Vosk model")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Failed to download Vosk model: {e}")
+            return False
+
+    def stop_vosk_vad(self):
+        """Stop Vosk VAD"""
+        if rec_state.vosk_stop_event:
+            rec_state.vosk_stop_event.set()
+        if rec_state.vosk_thread and rec_state.vosk_thread.is_alive():
+            rec_state.vosk_thread.join(timeout=1)
+        if rec_state.vosk_stream:
+            rec_state.vosk_stream.close()
+
     def listen_callback(self, recognizer, audio):
         self.logger.info("speechio heard audio")
 
@@ -424,6 +617,7 @@ class SpeechIOService(SpeechService, EasyResource):
         self.cache_ahead_completions = bool(attrs.get("cache_ahead_completions", False))
         self.disable_mic = bool(attrs.get("disable_mic", False))
         self.disable_audioout = bool(attrs.get("disable_audioout", False))
+        self.use_vosk_vad = bool(attrs.get("use_vosk_vad", False))  # New option for Vosk VAD
         self.command_list = []
         self.trigger_active = False
         self.active_trigger_type = ""
@@ -455,9 +649,12 @@ class SpeechIOService(SpeechService, EasyResource):
         rec_state.rec = sr.Recognizer()
 
         if not self.disable_mic:
-            # set up speech recognition
+            # Stop any existing VAD
             if rec_state.listen_closer is not None:
                 rec_state.listen_closer(True)
+            self.stop_vosk_vad()
+            
+            # Set up speech recognition
             rec_state.rec.dynamic_energy_threshold = True
 
             mics = sr.Microphone.list_microphone_names()
@@ -473,8 +670,15 @@ class SpeechIOService(SpeechService, EasyResource):
             # set up background listening if desired
             if self.should_listen:
                 self.logger.info("Will listen in background")
-                rec_state.listen_closer = rec_state.rec.listen_in_background(
-                    source=rec_state.mic,
-                    phrase_time_limit=self.listen_phrase_time_limit,
-                    callback=self.listen_callback,
-                )
+                
+                # Try Vosk VAD first if enabled
+                if self.use_vosk_vad and self.start_vosk_vad():
+                    self.logger.info("Using Vosk VAD for voice activity detection")
+                else:
+                    # Fall back to speech_recognition VAD
+                    self.logger.info("Using speech_recognition VAD")
+                    rec_state.listen_closer = rec_state.rec.listen_in_background(
+                        source=rec_state.mic,
+                        phrase_time_limit=self.listen_phrase_time_limit,
+                        callback=self.listen_callback,
+                    )

@@ -49,6 +49,7 @@ On the new component panel, copy and paste the following attribute template into
   "completion_persona": "<PERSONA>",
   "listen": true,
   "stt_provider": "google",
+  "use_vosk_vad": false,
   "listen_trigger_say": "<TRIGGER-PHRASE>",
   "listen_trigger_completion": "<COMPLETION-PHRASE>",
   "listen_trigger_command": "<COMMAND-TO-RETRIEVE-STORED-TEXT>",
@@ -79,7 +80,7 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | `completion_persona`  | string | Optional | If set, will pass "As <completion_persona> respond to '<completion_text>'" to all completion() requests. Default: `""`. |
 | `listen`  | boolean | Optional | If set to true and the robot as an available microphone device, will enable listening in the background.<br><br>If enabled, it will respond to configured [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command), based on input audio being converted to text.<br><br>If *listen* is enabled and [listen_triggers_active](#listen_triggers_active) is disabled, triggers will occur when [listen_trigger](#listen_trigger) is called.<br><br>Note that background (ambient) noise and microphone quality are important factors in the quality of the STT conversion.<br><br>Currently, Google STT is leveraged. Default: `false`. |
 | `stt_provider`  | string | Optional | This can be set to the name of a configured speech service that provides a `to_text` command, like [`stt-vosk`](https://app.viam.com/module/viam-labs/stt-vosk)\*. Otherwise, the Google STT API will be used. Default: `"google"`. |
-| `listen_phrase_time_limit`  | float | Optional | The maximum number of seconds that this will allow a phrase to continue before stopping and returning the part of the phrase processed before the time limit was reached.<br><br>The resulting audio will be the phrase cut off at the time limit.<br><br>If phrase_timeout is None, there will be no phrase time limit.<br><br>Note: if you are seeing instance where phrases are not being returned for much longer than you expect, try changing this to ~5 or so. Default: `None`. |
+| `listen_phrase_time_limit`  | float | Optional | The maximum number of seconds that this will allow a phrase to continue before stopping and returning the part of the phrase processed before the time limit was reached.<br><br>The resulting audio will be the phrase cut off at the time limit.<br><br>If phrase_timeout is None, there will be no phrase time limit.<br><br>Note: if you are seeing instance where phrases are not being returned for much longer than you expect, try changing this to ~5 or so. **Works with both default VAD and Vosk VAD.** Default: `None`. |
 | `listen_trigger_say`  | string | Optional | If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_say* will be converted to speech and repeated back by the robot. Default: `"robot say"`. |
 | `listen_trigger_completion`  | string | Optional | If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_completion* will be sent to the completion provider (if configured), converted to speech, and repeated back by the robot. Default: `"hey robot"`. |
 | `listen_trigger_command`  | string | Optional |  If `"listen": true`, any audio converted to text that is prefixed with *listen_trigger_command* will be stored in a LIFO buffer (list of strings) of size [listen_command_buffer_length](#listen_command_buffer_length) that can be retrieved via [get_commands()](#get_commandsinteger), enabling programmatic voice control of the robot. Default: `"robot can you"`. |
@@ -88,6 +89,7 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | `cache_ahead_completions`  | boolean | Optional | If true, will read a second completion for the request and cache it for next time a matching request is made. This is useful for faster completions when completion text is less variable. Default: `false`. |
 | `disable_mic`  | boolean | Optional | If true, will not configure any listening capabilities. This must be set to true if you do not have a valid microphone attached to your system. Default: `false`. |
 | `disable_audioout`  | boolean | Optional | If true, will not configure any audio output capabilities. This must be set to true if you do not have a valid audio output device attached to your system. Default: `false`. |
+| `use_vosk_vad`  | boolean | Optional | If true, will use Vosk for Voice Activity Detection (VAD) instead of the default speech_recognition VAD. The Vosk model will be automatically downloaded (~40MB) on first use. Default: `false`. |
 
 
 ### Example configuration
@@ -107,6 +109,32 @@ The following configuration sets up listening mode with local speech-to-text, us
   "mic_device_name": "myMic"
 }
 ```
+
+
+## Voice Activity Detection (VAD)
+
+The speech service supports two Voice Activity Detection systems:
+
+### Default VAD (speech_recognition)
+- Uses the built-in VAD from the `speech_recognition` library
+- Good for basic voice detection
+- Works out of the box with no additional setup
+
+### Vosk VAD
+- **Better handling of background noise**
+- **More precise speech boundary detection**
+- **Automatic model downloading** (~40MB) on first use
+- **Fallback protection** - automatically uses default VAD if Vosk fails
+- **Phrase time limiting** - respects `listen_phrase_time_limit` parameter
+
+#### Enabling Vosk VAD
+To use Vosk VAD, simply set `"use_vosk_vad": true` in your configuration. The system will:
+
+1. **Automatically download** the Vosk model on first use
+2. **Extract and verify** the model
+3. **Start Vosk VAD**
+4. **Fall back gracefully** to default VAD if anything fails
+
 
 ## Configure the `discovery service`
 

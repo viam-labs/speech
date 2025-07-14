@@ -7,4 +7,5 @@ speechrecognition~=3.14.3
 viam-sdk~=0.43.0
 pydub~=0.25.1
 pyinstaller~=6.10.0
+vosk~=0.3.45
 speech_service_api @ git+https://github.com/viam-labs/speech-service-api.git@v0.5.4
