@@ -17,14 +17,5 @@
       "short_description": "Find all available microphones to use for speech-to-text services"
     }
   ],
-  "build": {
-    "build": "sh build.sh",
-    "path": "dist/archive.tar.gz",
-    "arch": [
-      "linux/arm64",
-      "linux/amd64",
-      "darwin/arm64"
-    ]
-  },
-  "entrypoint": "dist/main"
+  "entrypoint": "run.sh"
 }
