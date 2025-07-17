@@ -6,7 +6,7 @@ VENV_NAME="venv"
 PYTHON="$VENV_NAME/bin/python"
 ENV_ERROR="This module requires Python >=3.8, pip, and virtualenv to be installed."
 
-apt-get install python3-pip git -y
+apt-get install python3-pip git python3-pyaudio portaudio19-dev alsa-tools alsa-utils flac -y
 
 if ! python3 -m venv $VENV_NAME >/dev/null 2>&1; then
     echo "Failed to create virtualenv."
