@@ -18,6 +18,7 @@ On Linux:
 
 On MacOS, `build.sh` will include the following dependencies using [Homebrew](https://brew.sh):
 
+*** As a note, pyaudio's dependency on portaudio requires python3.11. However, the required package distils is deprecated in this version, so environments will need to install setuptools instead ***
 ``` bash
 brew install portaudio
 ```
