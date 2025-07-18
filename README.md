@@ -83,7 +83,7 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | `listen_phrase_time_limit`  | float | Optional | The maximum number of seconds that this will allow a phrase to continue before stopping and returning the part of the phrase processed before the time limit was reached.<br><br>The resulting audio will be the phrase cut off at the time limit.<br><br>If phrase_timeout is None, there will be no phrase time limit.<br><br>Note: if you are seeing instance where phrases are not being returned for much longer than you expect, try changing this to ~5 or so. **Works with both default VAD and Vosk VAD.** Default: `None`. |
 | `listen_trigger_say`  | string | Optional | If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_say* will be converted to speech and repeated back by the robot. Default: `"robot say"`. |
 | `listen_trigger_completion`  | string | Optional | If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_completion* will be sent to the completion provider (if configured), converted to speech, and repeated back by the robot. Default: `"hey robot"`. |
-| `listen_trigger_command`  | string | Optional |  If `"listen": true`, any audio converted to text that is prefixed with *listen_trigger_command* will be stored in a LIFO buffer (list of strings) of size [listen_command_buffer_length](#listen_command_buffer_length) that can be retrieved via [get_commands()](#get_commandsinteger), enabling programmatic voice control of the robot. Default: `"robot can you"`. |
+| `listen_trigger_command`  | string | Optional |  If `"listen": true`, any audio converted to text that is prefixed with *listen_trigger_command* will be stored in a LIFO buffer (list of strings) of size [listen_command_buffer_length](#listen_command_buffer_length) that can be retrieved via [get_commands()](https://github.com/viam-labs/speech-service-api/blob/main/README.md#get_commandsinteger) from the Speech Service API, enabling programmatic voice control of the robot. Default: `"robot can you"`. |
 | `listen_command_buffer_length`  | integer | Optional | The buffer length for the command. Default: `10`. |
 | `mic_device_name`  | string | Optional | If not set, will attempt to use the first available microphone device.<br><br>If set, will attempt to use a specifically labeled device name.<br><br>Available microphone device names will logged on module startup. Default: `""`. |
 | `cache_ahead_completions`  | boolean | Optional | If true, will read a second completion for the request and cache it for next time a matching request is made. This is useful for faster completions when completion text is less variable. Default: `false`. |
@@ -166,58 +166,227 @@ The following attributes are available for this model:
 }
 ```
 
-## Troubleshooting
+# Troubleshooting 
+## ALSA Configuration Guide for Speechio Service
 
-When using a USB audio device, it may sometimes come up as the default, sometimes not.
-To ensure that it comes up consistently as the default, there are a couple things you can try:
+## Overview
 
-### Using an alsa config file
+The speechio service requires specific ALSA configuration to work properly with USB microphones and audio output devices. This guide provides step-by-step instructions for setting up persistent ALSA configuration that survives machine reboots.
 
-1. Run `aplay -l`, you will see output similar to:
+## Key Requirements
 
-```
-**** List of PLAYBACK Hardware Devices ****
-card 1: rockchipdp0 [rockchip-dp0], device 0: rockchip-dp0 spdif-hifi-0 [rockchip-dp0 spdif-hifi-0]
-  Subdevices: 1/1
-  Subdevice #0: subdevice #0
-card 2: rockchiphdmi0 [rockchip-hdmi0], device 0: rockchip-hdmi0 i2s-hifi-0 [rockchip-hdmi0 i2s-hifi-0]
-  Subdevices: 1/1
-  Subdevice #0: subdevice #0
-card 3: rockchipes8388 [rockchip-es8388], device 0: dailink-multicodecs ES8323 HiFi-0 [dailink-multicodecs ES8323 HiFi-0]
-  Subdevices: 1/1
-  Subdevice #0: subdevice #0
-card 4: UACDemoV10 [UACDemoV1.0], device 0: USB Audio [USB Audio]
-  Subdevices: 1/1
-  Subdevice #0: subdevice #0
-```
+- **Speechio service needs 16000Hz sample rate** for speech recognition
+- **USB microphones typically run at 44100Hz** (some at 48000Hz)
+- **Rate conversion is required** using ALSA `plug` plugin
+- **Configuration must persist across reboots**
 
-Identify the device card number you wish to use for output.
-In our example, we'll use the USB audio device (card 4).
-As root, add the following to `/etc/asound.conf`
+## Step-by-Step Setup
 
-```
-defaults.pcm.card 4
-defaults.ctl.card 4
+### 1. Identify Your Audio Hardware
+
+First, identify your audio devices:
+
+```bash
+# List playback devices
+aplay -l
+
+# List capture devices  
+arecord -l
+
+# Check current card assignments
+cat /proc/asound/cards
 ```
 
-### Using a modprobe config file
+**Typical setup:**
+- **Audio output device**: Usually card 0 (speakers/DAC)
+- **USB Microphone**: Usually card 1 (microphone input)
 
-1. check the existing alsa modules:
+### 2. Test Current Configuration
 
+Test if you get rate conversion warnings:
+
+```bash
+# Test recording at 16000Hz (required by speechio)
+arecord -f S16_LE -r 16000 -c 1 -t wav /tmp/test_default.wav &
+sleep 3
+kill %1
 ```
+
+**Common issue:** `Warning: rate is not accurate (requested = 16000Hz, got = 44100Hz)`
+
+### 3. Create Persistent ALSA Configuration
+
+**⚠️ Important: Use device names, not card numbers, for reliability across reboots**
+
+First, find your device names:
+```bash
+# Find device names (more stable than card numbers)
+cat /proc/asound/cards
+```
+
+Then create `/etc/asound.conf` using device names:
+
+```bash
+sudo tee /etc/asound.conf > /dev/null << 'EOF'
+# ALSA Configuration for Speechio Service
+# Uses device names for stability across reboots
+
+pcm.!default {
+    type asym
+    playback.pcm {
+        type hw
+        card YourOutputDevice    # Replace with your audio output device name
+        device 0
+    }
+    capture.pcm {
+        type plug               # CRITICAL: Use plug for rate conversion
+        slave.pcm {
+            type hw
+            card YourMicDevice  # Replace with your USB microphone device name
+            device 0
+        }
+    }
+}
+
+ctl.!default {
+    type hw
+    card YourOutputDevice
+}
+EOF
+```
+
+
+### 4. Test the Configuration
+
+Verify rate conversion works without warnings:
+
+```bash
+# Test recording - should work without rate warnings
+arecord -f S16_LE -r 16000 -c 1 -t wav /tmp/test_fixed.wav &
+sleep 3
+kill %1
+
+# Test playback
+speaker-test -D default -t wav -c 2 -l 1
+```
+
+**Expected result:** No rate conversion warnings
+
+### 6. Verify Configuration Persistence
+
+Ensure the configuration will survive reboots:
+
+```bash
+# Check that the file is not managed by packages
+dpkg -S /etc/asound.conf 2>/dev/null || echo "✓ File not managed by packages (good)"
+
+# Verify file exists and has correct content
+cat /etc/asound.conf
+```
+
+**Expected logs:**
+- `"Will listen in background"` - Service initialized
+- `"speechio heard audio"` - Audio detected when you speak
+- `"speechio heard <text>"` - Speech successfully transcribed
+
+
+## Troubleshooting Common Issues
+
+### Issue: Rate Conversion Warnings
+**Symptom:** `Warning: rate is not accurate (requested = 16000Hz, got = 44100Hz)`
+
+**Solution:** Use `type plug` for capture device in `/etc/asound.conf`
+
+### Issue: No Audio Detected by Speechio
+**Symptom:** No "speechio heard audio" logs when speaking
+
+**Solution:** 
+1. Verify microphone with `arecord -l`
+2. Check ALSA configuration with `arecord -D default -f S16_LE -r 16000 -c 1 -t wav /tmp/test.wav`
+3. Ensure `/etc/asound.conf` uses correct device names
+
+### Issue: Configuration Resets After Reboot
+**Symptom:** Audio setup works until machine restarts
+
+**Solution:** 
+1. Use `/etc/asound.conf` (not `~/.asoundrc`)
+2. Verify file is not managed by packages: `dpkg -S /etc/asound.conf`
+3. Check file permissions: `sudo chmod 644 /etc/asound.conf`
+
+### Issue: Wrong Audio Device Selected / Card Numbers Change
+**Symptom:** Speechio uses wrong microphone or speaker, or stops working after reboot
+
+**Cause:** Card numbers (0, 1, 2) can change between reboots based on USB detection order
+
+**Solution:** Use device names instead of card numbers in `/etc/asound.conf`
+
+```bash
+# Find stable device names
+cat /proc/asound/cards
+
+# Example output:
+# 0 [sndrpihifiberry]: HifiBerry-DAC - HifiBerry DAC
+# 1 [Device        ]: USB-Audio - USB PnP Sound Device
+
+# Use device names in config:
+card sndrpihifiberry    # Instead of card 0
+card Device             # Instead of card 1
+```
+
+## Testing Checklist
+
+Before deploying speechio service:
+
+- [ ] Audio devices detected: `aplay -l` and `arecord -l`
+- [ ] Rate conversion works: `arecord -f S16_LE -r 16000 -c 1 -t wav /tmp/test.wav` (no warnings)
+- [ ] ALSA config persists: `/etc/asound.conf` exists and not package-managed
+- [ ] Speechio logs show: "Will listen in background"
+- [ ] Speaking generates: "speechio heard audio" logs
+- [ ] Configuration survives reboot
+
+## Advanced Configuration Options
+
+### Using modprobe for Consistent Card Numbers
+
+If you prefer to use card numbers instead of device names, you can ensure consistent card ordering:
+
+1. **Check existing ALSA modules:**
+```bash
 cat /proc/asound/modules
 ```
 
-This will output something like:
-
+**Example output:**
 ```
- 0 snd_usb_audio
- 2 snd_soc_meson_card_utils
- 3 snd_usb_audio
+0 snd_usb_audio
+2 snd_soc_meson_card_utils
+3 snd_usb_audio
 ```
 
-2. ensure the USB device comes up first by editing /etc/modprobe.d/alsa-base.conf, adding content similar to:
-
-```
+2. **Set module loading order:**
+```bash
+sudo tee /etc/modprobe.d/alsa-base.conf > /dev/null << 'EOF'
+# Ensure USB audio devices load first
 options snd slots=snd-usb-audio,snd_soc_meson_card_utils
+EOF
 ```
+
+3. **Use card numbers in ALSA config:**
+```bash
+sudo tee /etc/asound.conf > /dev/null << 'EOF'
+pcm.!default {
+    type asym
+    playback.pcm "plughw:0,0"    # First USB device
+    capture.pcm "plughw:0,0"     # Same device for capture
+}
+EOF
+```
+
+**Note:** Device names are still recommended over this approach for better stability.
+
+## Notes for Developers
+
+- The `plug` plugin automatically handles rate conversion (44100Hz → 16000Hz)
+- Device names are more stable than card numbers across reboots
+- System-wide configuration (`/etc/asound.conf`) is required for viam-server access
+- Restart viam-server after ALSA configuration changes (speechio reinitializes audio devices on service restart)
+- Test thoroughly before deploying to multiple devices
