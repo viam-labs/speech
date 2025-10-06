@@ -636,12 +636,15 @@ class SpeechIOService(SpeechService, EasyResource):
             self.stt = cast(SpeechService, stt)
 
         if not self.disable_audioout:
-            if not mixer.get_init():
-                try:
-                    mixer.init(buffer=1024)
-                except Exception as err:
-                    os.environ["PULSE_SERVER"] = "/run/user/1000/pulse/native"
-                    mixer.init(buffer=1024)
+            # Release mixer before reinitializing
+            if mixer.get_init():
+                mixer.quit()
+                time.sleep(1)
+            try:
+                mixer.init(buffer=1024)
+            except Exception as err:
+                os.environ["PULSE_SERVER"] = "/run/user/1000/pulse/native"
+                mixer.init(buffer=1024)
         else:
             if mixer.get_init():
                 mixer.quit()
