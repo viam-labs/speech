@@ -328,14 +328,25 @@ class SpeechIOService(SpeechService, EasyResource):
             return mp3_fp.getvalue()
 
     def vosk_vad_callback(self, text: str):
-        """Callback for Vosk VAD when speech is detected"""
+        """Callback for Vosk VAD when speech is detected.
+
+        Note: Vosk doesn't provide alternatives, so fuzzy matching works
+        but multi-alternative search is not available.
+        """
         self.logger.info(f"Vosk VAD detected speech: '{text}'")
 
         if not self.main_loop or not self.main_loop.is_running():
             self.logger.error("Main event loop is not available for Vosk VAD task.")
             return
 
-        # Process the detected speech similar to the regular callback
+        # Try fuzzy matching if enabled (no alternatives available with Vosk)
+        if text and self.listen_trigger_fuzzy_matching and self.fuzzy_matcher:
+            match = self._check_fuzzy_triggers(text, alternatives=None)
+            if match:
+                self._handle_trigger_match(match)
+                return
+
+        # Fall back to existing regex-based matching
         if text != "":
             if (
                 self.should_listen and re.search(".*" + self.listen_trigger_say, text)
