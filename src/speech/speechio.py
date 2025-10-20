@@ -514,23 +514,44 @@ class SpeechIOService(SpeechService, EasyResource):
             rec_state.vosk_stream.close()
 
     def listen_callback(self, recognizer, audio):
+        """Process audio with optional fuzzy trigger matching."""
         self.logger.info("speechio heard audio")
 
         if not self.main_loop or not self.main_loop.is_running():
             self.logger.error("Main event loop is not available for STT task.")
             return
 
-        future = asyncio.run_coroutine_threadsafe(
-            self.convert_audio_to_text(audio), self.main_loop
-        )
-        try:
-            heard = future.result(timeout=15)
-        except Exception as e:
-            self.logger.error(f"STT task failed: {e}")
-            return
+        # Get transcript with alternatives if fuzzy matching is enabled
+        if self.listen_trigger_fuzzy_matching and self.fuzzy_matcher:
+            future = asyncio.run_coroutine_threadsafe(
+                self._convert_audio_to_text_with_alternatives(audio), self.main_loop
+            )
+            try:
+                heard, alternatives = future.result(timeout=15)
+            except Exception as e:
+                self.logger.error(f"STT task failed: {e}")
+                return
 
-        self.logger.info("speechio heard " + heard)
+            # Try fuzzy matching
+            if heard:
+                match = self._check_fuzzy_triggers(heard, alternatives)
+                if match:
+                    self._handle_trigger_match(match)
+                    return
+        else:
+            # Use existing regex-based matching
+            future = asyncio.run_coroutine_threadsafe(
+                self.convert_audio_to_text(audio), self.main_loop
+            )
+            try:
+                heard = future.result(timeout=15)
+            except Exception as e:
+                self.logger.error(f"STT task failed: {e}")
+                return
 
+        self.logger.info(f"speechio heard: {heard}")
+
+        # Existing regex-based trigger detection (fallback or when fuzzy disabled)
         if heard != "":
             if (
                 self.should_listen and re.search(".*" + self.listen_trigger_say, heard)
@@ -594,6 +615,112 @@ class SpeechIOService(SpeechService, EasyResource):
                 )
             )
         return heard
+
+    async def _convert_audio_to_text_with_alternatives(
+        self,
+        audio: sr.AudioData
+    ) -> tuple:
+        """Convert audio to text with alternatives for fuzzy matching.
+
+        Returns:
+            Tuple of (primary_transcript, alternatives_list)
+            alternatives_list is None if using external STT provider
+        """
+        if self.stt is not None:
+            # External STT provider - no alternatives available
+            text = await self.stt.to_text(audio.get_wav_data(), format="wav")
+            return text, None
+
+        try:
+            transcript = rec_state.rec.recognize_google(audio, show_all=True)
+
+            if type(transcript) is dict and transcript.get("alternative"):
+                alternatives = transcript["alternative"]
+                primary_text = alternatives[0]["transcript"]
+                return primary_text, alternatives
+
+        except sr.UnknownValueError:
+            self.logger.warning("Google Speech Recognition could not understand audio")
+        except sr.RequestError as e:
+            self.logger.warning(f"Could not request results from Google Speech Recognition: {e}")
+
+        return "", None
+
+    def _check_fuzzy_triggers(
+        self,
+        heard: str,
+        alternatives: Optional[list]
+    ) -> Optional[object]:
+        """Check all trigger types using fuzzy matching.
+
+        Args:
+            heard: Primary transcript
+            alternatives: List of alternative transcriptions
+
+        Returns:
+            TriggerMatch if a trigger matched, None otherwise
+        """
+        triggers = [
+            ("say", self.listen_trigger_say),
+            ("completion", self.listen_trigger_completion),
+            ("command", self.listen_trigger_command)
+        ]
+
+        for trigger_type, trigger_phrase in triggers:
+            # Check if this trigger should be active
+            should_check = (
+                self.should_listen or
+                (self.trigger_active and self.active_trigger_type == trigger_type)
+            )
+
+            if not should_check:
+                continue
+
+            # Try fuzzy match
+            match = self.fuzzy_matcher.match_trigger(trigger_phrase, heard, alternatives)
+
+            if match:
+                self.logger.info(
+                    f"Fuzzy match found: type={trigger_type}, "
+                    f"distance={match.distance}, "
+                    f"confidence={match.confidence:.2f}, "
+                    f"matched='{match.matched_phrase}', "
+                    f"alt_index={match.alternative_index}"
+                )
+
+                # Add trigger type to match
+                match.trigger_type = trigger_type
+                return match
+
+        return None
+
+    def _handle_trigger_match(self, match: object):
+        """Handle a successful trigger match.
+
+        Args:
+            match: TriggerMatch object with match details
+        """
+        self.trigger_active = False
+        command_text = match.command_text
+
+        self.logger.debug(f"Extracted command: '{command_text}'")
+
+        if match.trigger_type == "say":
+            asyncio.run_coroutine_threadsafe(
+                self.say(command_text, blocking=False), self.main_loop
+            )
+        elif match.trigger_type == "completion":
+            asyncio.run_coroutine_threadsafe(
+                self.completion(command_text, blocking=False), self.main_loop
+            )
+        elif match.trigger_type == "command":
+            self.command_list.insert(0, command_text)
+            self.logger.debug(f"added to command_list: '{command_text}'")
+            del self.command_list[self.listen_command_buffer_length :]
+
+        if not self.should_listen:
+            if rec_state.listen_closer is not None:
+                rec_state.listen_closer()
 
     def reconfigure(
         self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]
