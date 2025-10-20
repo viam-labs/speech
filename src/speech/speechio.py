@@ -99,6 +99,9 @@ class SpeechIOService(SpeechService, EasyResource):
     disable_audioout: bool
     eleven_client: dict = {}
     main_loop: Optional[asyncio.AbstractEventLoop] = None
+    listen_trigger_fuzzy_matching: bool
+    listen_trigger_fuzzy_threshold: int
+    fuzzy_matcher: Optional[object] = None
 
     @classmethod
     def new(
@@ -641,6 +644,33 @@ class SpeechIOService(SpeechService, EasyResource):
         self.trigger_active = False
         self.active_trigger_type = ""
         self.stt = None
+
+        # Fuzzy matching configuration
+        self.listen_trigger_fuzzy_matching = bool(attrs.get("listen_trigger_fuzzy_matching", False))
+        self.listen_trigger_fuzzy_threshold = int(attrs.get("listen_trigger_fuzzy_threshold", 2))
+
+        # Validate threshold
+        if not 0 <= self.listen_trigger_fuzzy_threshold <= 5:
+            self.logger.warning(
+                f"Invalid fuzzy threshold {self.listen_trigger_fuzzy_threshold}, using default 2"
+            )
+            self.listen_trigger_fuzzy_threshold = 2
+
+        # Initialize fuzzy matcher if enabled
+        if self.listen_trigger_fuzzy_matching:
+            try:
+                from src.speech.fuzzy_matcher import FuzzyWakeWordMatcher
+                self.fuzzy_matcher = FuzzyWakeWordMatcher(threshold=self.listen_trigger_fuzzy_threshold)
+                self.logger.info(
+                    f"Fuzzy matching enabled with threshold={self.listen_trigger_fuzzy_threshold}"
+                )
+            except ImportError as e:
+                self.logger.error(f"Failed to initialize fuzzy matcher: {e}")
+                self.logger.warning("Falling back to regex matching")
+                self.listen_trigger_fuzzy_matching = False
+                self.fuzzy_matcher = None
+        else:
+            self.fuzzy_matcher = None
 
         if (
             self.speech_provider == SpeechProvider.elevenlabs
