@@ -1,22 +1,24 @@
-"""Fuzzy wake word matching using Levenshtein distance.
+"""Fuzzy wake word matching using Levenshtein distance via rapidfuzz.
 
 This module provides fuzzy matching for wake word detection in speech recognition
 systems. It uses Levenshtein distance (edit distance) to match trigger phrases
 even when they are transcribed with slight variations.
 
 The implementation is thread-safe and stateless, making it suitable for use in
-concurrent audio processing callbacks.
+concurrent audio processing callbacks. It leverages rapidfuzz for high-performance
+matching with pre-built ARM wheels for Raspberry Pi compatibility.
 """
 
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import re
 
 try:
-    import Levenshtein
-    LEVENSHTEIN_AVAILABLE = True
+    from rapidfuzz.distance import Levenshtein
+    from rapidfuzz.process import extractOne
+    RAPIDFUZZ_AVAILABLE = True
 except ImportError:
-    LEVENSHTEIN_AVAILABLE = False
+    RAPIDFUZZ_AVAILABLE = False
 
 
 @dataclass
@@ -70,10 +72,10 @@ class FuzzyWakeWordMatcher:
         Raises:
             ImportError: If python-Levenshtein is not installed
         """
-        if not LEVENSHTEIN_AVAILABLE:
+        if not RAPIDFUZZ_AVAILABLE:
             raise ImportError(
-                "python-Levenshtein is required for fuzzy matching. "
-                "Install with: pip install python-Levenshtein"
+                "rapidfuzz is required for fuzzy matching. "
+                "Install with: pip install rapidfuzz"
             )
 
         self.threshold = max(0, min(5, threshold))  # Clamp to valid range
@@ -137,7 +139,10 @@ class FuzzyWakeWordMatcher:
         confidence: float,
         alt_index: int
     ) -> Optional[TriggerMatch]:
-        """Match trigger against a single transcript using sliding window.
+        """Match trigger against a single transcript using rapidfuzz process utilities.
+
+        This implementation leverages rapidfuzz's optimized extractOne for better
+        performance compared to manual sliding window iteration.
 
         Args:
             normalized_trigger: Pre-normalized trigger phrase
@@ -150,51 +155,80 @@ class FuzzyWakeWordMatcher:
         """
         normalized_transcript = self._normalize_text(transcript)
 
-        # Use simple sliding window based on character count
-        # Window size = trigger length ± 20% to allow for length variations
-        trigger_len = len(normalized_trigger)
+        # Generate candidate windows with position tracking
+        candidates = self._generate_candidate_windows(normalized_transcript, len(normalized_trigger))
+
+        if not candidates:
+            return None
+
+        # Use rapidfuzz's optimized extractOne to find best match
+        # We need to extract just the text for matching, then use index to get position info
+        candidate_texts = [text for text, _, _ in candidates]
+
+        result = extractOne(
+            normalized_trigger,
+            candidate_texts,
+            scorer=Levenshtein.distance,
+            score_cutoff=self.threshold
+        )
+
+        if result is None:
+            return None
+
+        # result is tuple: (matched_value, score, index)
+        matched_text, distance, candidate_idx = result
+
+        # Get window position info from candidate index
+        _, window_start, window_size = candidates[candidate_idx]
+
+        # Find original position in unnormalized transcript
+        match_start, match_end = self._find_original_position(
+            transcript, window_start, window_start + window_size
+        )
+
+        # Extract command text (everything after the match)
+        command_text = transcript[match_end:].strip()
+
+        return TriggerMatch(
+            matched=True,
+            distance=int(distance),
+            confidence=confidence,
+            matched_phrase=transcript[match_start:match_end],
+            match_start_pos=match_start,
+            match_end_pos=match_end,
+            command_text=command_text,
+            alternative_index=alt_index
+        )
+
+    def _generate_candidate_windows(
+        self,
+        normalized_transcript: str,
+        trigger_len: int
+    ) -> List[Tuple[str, int, int]]:
+        """Generate candidate sliding windows for matching.
+
+        This is an internal implementation detail that generates all possible
+        candidate substrings from the transcript for matching against the trigger.
+        The window sizes are based on the trigger length ± 20% to allow for
+        length variations in transcription.
+
+        Args:
+            normalized_transcript: Pre-normalized transcript text
+            trigger_len: Length of the normalized trigger phrase
+
+        Returns:
+            List of tuples: (candidate_text, start_position, window_size)
+        """
         min_window = max(1, int(trigger_len * 0.8))
         max_window = int(trigger_len * 1.2)
 
-        best_match = None
-        best_distance = self.threshold + 1
-
-        # Try different window sizes
+        candidates = []
         for window_size in range(min_window, max_window + 1):
-            # Slide window across transcript
             for i in range(len(normalized_transcript) - window_size + 1):
-                candidate = normalized_transcript[i:i + window_size]
-                distance = Levenshtein.distance(normalized_trigger, candidate)
+                candidate_text = normalized_transcript[i:i + window_size]
+                candidates.append((candidate_text, i, window_size))
 
-                if distance <= self.threshold and distance < best_distance:
-                    # Found a better match
-                    best_distance = distance
-
-                    # Find original position in unnormalized transcript
-                    # This is approximate but works well in practice
-                    match_start, match_end = self._find_original_position(
-                        transcript, i, i + window_size
-                    )
-
-                    # Extract command text (everything after the match)
-                    command_text = transcript[match_end:].strip()
-
-                    best_match = TriggerMatch(
-                        matched=True,
-                        distance=distance,
-                        confidence=confidence,
-                        matched_phrase=transcript[match_start:match_end],
-                        match_start_pos=match_start,
-                        match_end_pos=match_end,
-                        command_text=command_text,
-                        alternative_index=alt_index
-                    )
-
-                    # Early exit if we found exact match
-                    if distance == 0:
-                        return best_match
-
-        return best_match
+        return candidates
 
     def _normalize_text(self, text: str) -> str:
         """Normalize text for comparison.
