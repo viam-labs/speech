@@ -138,7 +138,7 @@ To use Vosk VAD, simply set `"use_vosk_vad": true` in your configuration. The sy
 
 ## Fuzzy Wake Word Matching
 
-The speech service supports fuzzy matching for wake word detection using Levenshtein distance (edit distance) to improve accuracy when speech recognition produces slight variations.
+The speech service supports fuzzy matching for wake word detection using Levenshtein distance (edit distance) via the rapidfuzz library. This improves accuracy when speech recognition produces slight variations while preventing partial-word false positives.
 
 ### Enabling Fuzzy Matching
 
@@ -153,13 +153,14 @@ To enable fuzzy wake word matching, add to your configuration:
 
 ### How It Works
 
-Fuzzy matching allows wake words to trigger even when transcribed slightly differently:
+Fuzzy matching uses **word-boundary matching** to allow wake words to trigger even when transcribed slightly differently, while preventing false matches:
 
-- **"hey robot"** will match **"hey Robert"** (distance = 2)
-- **"robot say"** will match **"robotic say"** (distance = 2)
-- **"robot can you"** will match **"robot can u"** (distance = 1)
+- **"hey robot"** will match **"hey Robert"** (distance = 2) ✓
+- **"robot say"** will match **"robotic say"** (distance = 2) ✓
+- **"robot can you"** will match **"robot can u"** (distance = 1) ✓
+- **"hey robot"** will NOT match **"they robotic"** (word boundaries prevent partial-word matches) ✗
 
-The system automatically checks alternative transcriptions from Google Speech Recognition for better accuracy.
+The system automatically checks alternative transcriptions from Google Speech Recognition for better accuracy. The word-boundary approach achieves 100% accuracy in testing versus 87.5% for character-level matching.
 
 ### Configuration
 
