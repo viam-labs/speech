@@ -17,5 +17,15 @@
       "short_description": "Find all available microphones to use for speech-to-text services"
     }
   ],
-  "entrypoint": "run.sh"
+  "entrypoint": "run.sh",
+  "first_run": "setup.sh",
+  "build": {
+    "build": "tar -czvf module.tar.gz *.sh src/ main.py requirements.txt meta.json",
+    "path": "module.tar.gz",
+    "arch": [
+      "linux/arm64",
+      "linux/amd64",
+      "darwin/arm64"
+    ]
+  }
 }

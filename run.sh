@@ -5,7 +5,8 @@ cd `dirname $0`
 VENV_NAME="venv"
 PYTHON="$VENV_NAME/bin/python"
 
-sh ./setup.sh
+# uncomment for hot reloading
+# sh ./setup.sh
 
 # Be sure to use `exec` so that termination signals reach the python process,
 # or handle forwarding termination signals manually

@@ -6,7 +6,7 @@ VENV_NAME="venv"
 PYTHON="$VENV_NAME/bin/python"
 ENV_ERROR="This module requires Python >=3.8, pip, and virtualenv to be installed."
 
-apt-get install python3-pip git python3-pyaudio portaudio19-dev alsa-tools alsa-utils flac -y
+apt-get install python3-pip git python3-pyaudio portaudio19-dev alsa-tools alsa-utils flac python3-dev build-essential -y
 
 if ! python3 -m venv $VENV_NAME >/dev/null 2>&1; then
     echo "Failed to create virtualenv."
@@ -34,10 +34,5 @@ fi
 # remove -U if viam-sdk should not be upgraded whenever possible
 # -qq suppresses extraneous output from pip
 echo "Virtualenv found/created. Installing/upgrading Python packages..."
-if ! [ -f .installed ]; then
-    if ! $PYTHON -m pip install -r requirements.txt -Uqq; then
-        exit 1
-    else
-        touch .installed
-    fi
-fi
+$PYTHON -m pip install --upgrade pip setuptools wheel -qq
+$PYTHON -m pip install -r requirements.txt -Uqq
