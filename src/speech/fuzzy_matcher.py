@@ -9,15 +9,17 @@ leverages rapidfuzz for high-performance distance calculations with pre-built
 ARM wheels for Raspberry Pi compatibility.
 
 The implementation is thread-safe and stateless, making it suitable for use in
-concurrent audio processing callbacks.
+concurrent audio processing callbacks. It leverages rapidfuzz for high-performance
+matching with pre-built ARM wheels for Raspberry Pi compatibility.
 """
 
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import re
 
 try:
     from rapidfuzz.distance import Levenshtein
+    from rapidfuzz.process import extractOne
     RAPIDFUZZ_AVAILABLE = True
 except ImportError:
     RAPIDFUZZ_AVAILABLE = False
@@ -145,10 +147,10 @@ class FuzzyWakeWordMatcher:
         confidence: float,
         alt_index: int
     ) -> Optional[TriggerMatch]:
-        """Match trigger against a single transcript using word-boundary windows.
+        """Match trigger against a single transcript using rapidfuzz process utilities.
 
-        This approach splits text into words and matches against N-word windows,
-        preventing partial-word matches and simplifying command extraction.
+        This implementation leverages rapidfuzz's optimized extractOne for better
+        performance compared to manual sliding window iteration.
 
         Args:
             normalized_trigger: Pre-normalized trigger phrase
@@ -161,134 +163,80 @@ class FuzzyWakeWordMatcher:
         """
         normalized_transcript = self._normalize_text(transcript)
 
-        # Split into words
-        trigger_words = normalized_trigger.split()
-        transcript_words = normalized_transcript.split()
+        # Generate candidate windows with position tracking
+        candidates = self._generate_candidate_windows(normalized_transcript, len(normalized_trigger))
 
-        if not trigger_words or not transcript_words:
+        if not candidates:
             return None
 
-        # Track best match
-        best_distance = self.threshold + 1
-        best_position = -1
-        best_word_count = len(trigger_words)
+        # Use rapidfuzz's optimized extractOne to find best match
+        # We need to extract just the text for matching, then use index to get position info
+        candidate_texts = [text for text, _, _ in candidates]
 
-        # Try N-word windows where N is around the trigger word count
-        # Range: trigger_word_count - 1 to trigger_word_count + 1
-        # This allows for word insertions/deletions while staying focused
-        for num_words in range(max(1, len(trigger_words) - 1), len(trigger_words) + 2):
-            for i in range(len(transcript_words) - num_words + 1):
-                # Get window of words
-                window_words = transcript_words[i:i + num_words]
-                window_text = " ".join(window_words)
-
-                # Calculate Levenshtein distance using rapidfuzz
-                distance = Levenshtein.distance(normalized_trigger, window_text)
-
-                # Update if better match found
-                if distance < best_distance:
-                    best_distance = distance
-                    best_position = i
-                    best_word_count = num_words
-
-        # Check if we found a match within threshold
-        if best_distance > self.threshold or best_position == -1:
-            return None
-
-        # Extract the matched words from normalized transcript
-        matched_words = transcript_words[best_position:best_position + best_word_count]
-        matched_normalized = " ".join(matched_words)
-
-        # Map back to original transcript to get:
-        # 1. The actual matched phrase (with original casing/punctuation)
-        # 2. The command text (everything after the match)
-        match_start, match_end = self._find_word_positions_in_original(
-            transcript, matched_words, best_position
+        result = extractOne(
+            normalized_trigger,
+            candidate_texts,
+            scorer=Levenshtein.distance,
+            score_cutoff=self.threshold
         )
 
-        # Extract command text (everything after the matched trigger)
-        command_text = transcript[match_end:].strip()
+        if result is None:
+            return None
 
-        # Get the actual matched phrase from original transcript
-        matched_phrase = transcript[match_start:match_end].strip()
+        # result is tuple: (matched_value, score, index)
+        matched_text, distance, candidate_idx = result
+
+        # Get window position info from candidate index
+        _, window_start, window_size = candidates[candidate_idx]
+
+        # Find original position in unnormalized transcript
+        match_start, match_end = self._find_original_position(
+            transcript, window_start, window_start + window_size
+        )
+
+        # Extract command text (everything after the match)
+        command_text = transcript[match_end:].strip()
 
         return TriggerMatch(
             matched=True,
-            distance=best_distance,
+            distance=int(distance),
             confidence=confidence,
-            matched_phrase=matched_phrase,
+            matched_phrase=transcript[match_start:match_end],
             match_start_pos=match_start,
             match_end_pos=match_end,
             command_text=command_text,
             alternative_index=alt_index
         )
 
-    def _find_word_positions_in_original(
+    def _generate_candidate_windows(
         self,
-        original_text: str,
-        matched_words: List[str],
-        word_position: int
-    ) -> tuple:
-        """Find character positions in original text for matched words.
+        normalized_transcript: str,
+        trigger_len: int
+    ) -> List[Tuple[str, int, int]]:
+        """Generate candidate sliding windows for matching.
 
-        This maps word positions from normalized text back to character positions
-        in the original text by reconstructing the word boundaries.
+        This is an internal implementation detail that generates all possible
+        candidate substrings from the transcript for matching against the trigger.
+        The window sizes are based on the trigger length ± 20% to allow for
+        length variations in transcription.
 
         Args:
-            original_text: Original unnormalized text
-            matched_words: List of matched words from normalized text
-            word_position: Starting word index in the normalized word list
+            normalized_transcript: Pre-normalized transcript text
+            trigger_len: Length of the normalized trigger phrase
 
         Returns:
-            Tuple of (start_char_pos, end_char_pos) in original text
+            List of tuples: (candidate_text, start_position, window_size)
         """
-        # Normalize the original text to get word boundaries
-        normalized = self._normalize_text(original_text)
-        all_words = normalized.split()
+        min_window = max(1, int(trigger_len * 0.8))
+        max_window = int(trigger_len * 1.2)
 
-        # Find the position of these words in the normalized text
-        # Build the text up to and including the matched words
-        if word_position < len(all_words):
-            # Text before the match
-            words_before = all_words[:word_position]
-            text_before_match = " ".join(words_before)
+        candidates = []
+        for window_size in range(min_window, max_window + 1):
+            for i in range(len(normalized_transcript) - window_size + 1):
+                candidate_text = normalized_transcript[i:i + window_size]
+                candidates.append((candidate_text, i, window_size))
 
-            # The matched text
-            matched_text = " ".join(matched_words)
-
-            # Find where this appears in the original (case-insensitive search)
-            original_lower = original_text.lower()
-
-            # Search for the matched text after the "before" text
-            search_start = 0
-            if words_before:
-                # Find where the "before" text ends
-                before_idx = original_lower.find(text_before_match.lower())
-                if before_idx != -1:
-                    search_start = before_idx + len(text_before_match)
-
-            # Find the matched text starting from search_start
-            match_idx = original_lower.find(matched_text.lower(), search_start)
-
-            if match_idx != -1:
-                # Found it! Return the positions
-                match_start = match_idx
-                match_end = match_idx + len(matched_text)
-                return match_start, match_end
-
-        # Fallback: use simple search
-        # This handles edge cases where word boundaries don't align perfectly
-        normalized_lower = self._normalize_text(original_text).lower()
-        matched_text = " ".join(matched_words)
-
-        idx = normalized_lower.find(matched_text)
-        if idx != -1:
-            # Approximate position in original
-            # Count how many characters we need to skip
-            return idx, idx + len(matched_text)
-
-        # Last resort: return beginning
-        return 0, len(" ".join(matched_words))
+        return candidates
 
     def _normalize_text(self, text: str) -> str:
         """Normalize text for comparison.
