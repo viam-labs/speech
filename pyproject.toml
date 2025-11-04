@@ -1,12 +1,12 @@
 [project]
 name = "speech"
-version = "0.7.0"
+version = "0.9.7"
 authors = [
   { name="Matt Vella", email="mcvella@gmail.com" },
 ]
 description = "Viam modular service that provides TTS, STT, and AI completion capabilities"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8.1"
 
 [project.urls]
 "Homepage" = "https://github.com/viam-labs/speech"

@@ -4,8 +4,8 @@ pyaudio~=0.2.14
 openai~=1.51.2
 pygame~=2.6.1
 speechrecognition~=3.14.3
-viam-sdk~=0.43.0
+viam-sdk~=0.58.0
 pydub~=0.25.1
 pyinstaller~=6.10.0
 vosk~=0.3.44
-speech_service_api @ git+https://github.com/viam-labs/speech-service-api.git@v0.5.4
+speech_service_api @ git+https://github.com/viam-labs/speech-service-api.git@v0.6.0
