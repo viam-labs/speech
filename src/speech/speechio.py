@@ -5,7 +5,6 @@ import os
 import re
 import asyncio
 import hashlib
-import wave
 import threading
 import pyaudio
 import json
@@ -265,12 +264,12 @@ class SpeechIOService(SpeechService, EasyResource):
 
     async def to_text(self, speech: bytes, format: str = "mp3"):
         if self.stt is not None:
-            self.logger.info("using stt provider")
+            self.logger.debug("using stt provider")
             return await self.stt.to_text(speech, format)
 
-        self.logger.info("using google stt")
+        self.logger.debug("using google stt")
         if rec_state.rec is not None:
-            self.logger.info("rec_state.rec is not None")
+            self.logger.debug("rec_state.rec is not None")
 
             # Use temporary file for speech_recognition
             import tempfile
@@ -287,7 +286,7 @@ class SpeechIOService(SpeechService, EasyResource):
                 try:
                     # Convert to WAV if needed
                     if format != "wav":
-                        self.logger.info(f"Converting {format} to WAV")
+                        self.logger.debug(f"Converting {format} to WAV")
                         sound = AudioSegment.from_file(temp_file_path, format=format)
                         wav_path = temp_file_path.replace(f".{format}", ".wav")
                         sound.export(wav_path, format="wav")
@@ -296,7 +295,7 @@ class SpeechIOService(SpeechService, EasyResource):
 
                     # Use AudioData.from_file() to create AudioData directly from file
                     audio = sr.AudioData.from_file(temp_file_path)
-                    self.logger.info(
+                    self.logger.debug(
                         f"Created AudioData from file: {len(audio.frame_data)} bytes, {audio.sample_rate}Hz"
                     )
 
@@ -333,7 +332,7 @@ class SpeechIOService(SpeechService, EasyResource):
         Note: Vosk doesn't provide alternatives, so fuzzy matching works
         but multi-alternative search is not available.
         """
-        self.logger.info(f"Vosk VAD detected speech: '{text}'")
+        self.logger.debug(f"Vosk VAD detected speech: '{text}'")
 
         if not self.main_loop or not self.main_loop.is_running():
             self.logger.error("Main event loop is not available for Vosk VAD task.")
@@ -451,9 +450,9 @@ class SpeechIOService(SpeechService, EasyResource):
             # You can download models from https://alphacephei.com/vosk/models
             model_path = os.path.expanduser("~/vosk-model-small-en-us-0.15")
             if not os.path.exists(model_path):
-                self.logger.info("Vosk model not found, attempting to download...")
+                self.logger.debug("Vosk model not found, attempting to download...")
                 if self.download_vosk_model():
-                    self.logger.info("Successfully downloaded Vosk model")
+                    self.logger.debug("Successfully downloaded Vosk model")
                 else:
                     self.logger.warning(
                         "Failed to download Vosk model, falling back to speech_recognition VAD"
@@ -469,7 +468,7 @@ class SpeechIOService(SpeechService, EasyResource):
             )
             rec_state.vosk_thread.start()
 
-            self.logger.info("Started Vosk VAD for voice activity detection")
+            self.logger.debug("Started Vosk VAD for voice activity detection")
             return True
 
         except Exception as e:
@@ -481,7 +480,6 @@ class SpeechIOService(SpeechService, EasyResource):
         try:
             import urllib.request
             import zipfile
-            import shutil
 
             model_name = "vosk-model-small-en-us-0.15"
             model_url = (
@@ -490,13 +488,13 @@ class SpeechIOService(SpeechService, EasyResource):
             model_path = os.path.expanduser(f"~/{model_name}")
             zip_path = os.path.expanduser(f"~/{model_name}.zip")
 
-            self.logger.info(f"Downloading Vosk model from {model_url}")
+            self.logger.debug(f"Downloading Vosk model from {model_url}")
 
             # Download the model
             urllib.request.urlretrieve(model_url, zip_path)
 
             # Extract the model
-            self.logger.info("Extracting Vosk model...")
+            self.logger.debug("Extracting Vosk model...")
             with zipfile.ZipFile(zip_path, "r") as zip_ref:
                 zip_ref.extractall(os.path.expanduser("~/"))
 
@@ -505,7 +503,7 @@ class SpeechIOService(SpeechService, EasyResource):
 
             # Verify the model was extracted correctly
             if os.path.exists(model_path):
-                self.logger.info(f"Vosk model downloaded successfully to {model_path}")
+                self.logger.debug(f"Vosk model downloaded successfully to {model_path}")
                 return True
             else:
                 self.logger.error("Failed to extract Vosk model")
@@ -526,11 +524,11 @@ class SpeechIOService(SpeechService, EasyResource):
 
     def listen_callback(self, recognizer, audio):
         """Process audio with optional fuzzy trigger matching."""
-        self.logger.info("speechio heard audio")
-
         if not self.main_loop or not self.main_loop.is_running():
             self.logger.error("Main event loop is not available for STT task.")
             return
+
+        self.logger.debug("Listen callback got audio")
 
         # Get transcript with alternatives if fuzzy matching is enabled
         if self.listen_trigger_fuzzy_matching and self.fuzzy_matcher:
@@ -545,6 +543,7 @@ class SpeechIOService(SpeechService, EasyResource):
 
             # Try fuzzy matching
             if heard:
+                self.logger.debug(f"speechio heard: {heard}")
                 match = self._check_fuzzy_triggers(heard, alternatives)
                 if match:
                     self._handle_trigger_match(match)
@@ -560,10 +559,10 @@ class SpeechIOService(SpeechService, EasyResource):
                 self.logger.error(f"STT task failed: {e}")
                 return
 
-        self.logger.info(f"speechio heard: {heard}")
-
         # Existing regex-based trigger detection (fallback or when fuzzy disabled)
         if heard != "":
+            self.logger.debug(f"speechio heard: {heard}")
+
             if (
                 self.should_listen and re.search(".*" + self.listen_trigger_say, heard)
             ) or (self.trigger_active and self.active_trigger_type == "say"):
@@ -600,27 +599,27 @@ class SpeechIOService(SpeechService, EasyResource):
 
     async def convert_audio_to_text(self, audio: sr.AudioData) -> str:
         if self.stt is not None:
-            self.logger.info("getting wav data")
+            self.logger.debug("getting wav data")
             audio_data = audio.get_wav_data()
-            self.logger.info("using stt provider")
+            self.logger.debug("using stt provider")
             return await self.stt.to_text(audio_data, format="wav")
 
         heard = ""
 
         try:
-            self.logger.info("will convert audio to text")
+            self.logger.debug("will convert audio to text")
             # for testing purposes, we're just using the default API key
             # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
             # instead of `r.recognize_google(audio)`
             transcript = rec_state.rec.recognize_google(audio, show_all=True)
-            self.logger.info("transcript: " + str(transcript))
+            self.logger.debug("transcript: " + str(transcript))
             if type(transcript) is dict and transcript.get("alternative"):
                 heard = transcript["alternative"][0]["transcript"]
-                self.logger.info("heard: " + heard)
+                self.logger.debug("heard: " + heard)
         except sr.UnknownValueError:
-            self.logger.warning("Google Speech Recognition could not understand audio")
+            self.logger.debug("Google Speech Recognition could not understand audio")
         except sr.RequestError as e:
-            self.logger.warning(
+            self.logger.error(
                 "Could not request results from Google Speech Recognition service; {0}".format(
                     e
                 )
@@ -628,8 +627,7 @@ class SpeechIOService(SpeechService, EasyResource):
         return heard
 
     async def _convert_audio_to_text_with_alternatives(
-        self,
-        audio: sr.AudioData
+        self, audio: sr.AudioData
     ) -> tuple:
         """Convert audio to text with alternatives for fuzzy matching.
 
@@ -651,16 +649,16 @@ class SpeechIOService(SpeechService, EasyResource):
                 return primary_text, alternatives
 
         except sr.UnknownValueError:
-            self.logger.warning("Google Speech Recognition could not understand audio")
+            self.logger.debug("Google Speech Recognition could not understand audio")
         except sr.RequestError as e:
-            self.logger.warning(f"Could not request results from Google Speech Recognition: {e}")
+            self.logger.error(
+                f"Could not request results from Google Speech Recognition: {e}"
+            )
 
         return "", None
 
     def _check_fuzzy_triggers(
-        self,
-        heard: str,
-        alternatives: Optional[list]
+        self, heard: str, alternatives: Optional[list]
     ) -> Optional[object]:
         """Check all trigger types using fuzzy matching.
 
@@ -674,21 +672,22 @@ class SpeechIOService(SpeechService, EasyResource):
         triggers = [
             ("say", self.listen_trigger_say),
             ("completion", self.listen_trigger_completion),
-            ("command", self.listen_trigger_command)
+            ("command", self.listen_trigger_command),
         ]
 
         for trigger_type, trigger_phrase in triggers:
             # Check if this trigger should be active
-            should_check = (
-                self.should_listen or
-                (self.trigger_active and self.active_trigger_type == trigger_type)
+            should_check = self.should_listen or (
+                self.trigger_active and self.active_trigger_type == trigger_type
             )
 
             if not should_check:
                 continue
 
             # Try fuzzy match
-            match = self.fuzzy_matcher.match_trigger(trigger_phrase, heard, alternatives)
+            match = self.fuzzy_matcher.match_trigger(
+                trigger_phrase, heard, alternatives
+            )
 
             if match:
                 self.logger.info(
@@ -784,8 +783,12 @@ class SpeechIOService(SpeechService, EasyResource):
         self.stt = None
 
         # Fuzzy matching configuration
-        self.listen_trigger_fuzzy_matching = bool(attrs.get("listen_trigger_fuzzy_matching", False))
-        self.listen_trigger_fuzzy_threshold = int(attrs.get("listen_trigger_fuzzy_threshold", 2))
+        self.listen_trigger_fuzzy_matching = bool(
+            attrs.get("listen_trigger_fuzzy_matching", False)
+        )
+        self.listen_trigger_fuzzy_threshold = int(
+            attrs.get("listen_trigger_fuzzy_threshold", 2)
+        )
 
         # Validate threshold
         if not 0 <= self.listen_trigger_fuzzy_threshold <= 5:
@@ -798,8 +801,11 @@ class SpeechIOService(SpeechService, EasyResource):
         if self.listen_trigger_fuzzy_matching:
             try:
                 from src.speech.fuzzy_matcher import FuzzyWakeWordMatcher
-                self.fuzzy_matcher = FuzzyWakeWordMatcher(threshold=self.listen_trigger_fuzzy_threshold)
-                self.logger.info(
+
+                self.fuzzy_matcher = FuzzyWakeWordMatcher(
+                    threshold=self.listen_trigger_fuzzy_threshold
+                )
+                self.logger.debug(
                     f"Fuzzy matching enabled with threshold={self.listen_trigger_fuzzy_threshold}"
                 )
             except ImportError as e:
@@ -856,14 +862,14 @@ class SpeechIOService(SpeechService, EasyResource):
 
             # set up background listening if desired
             if self.should_listen:
-                self.logger.info("Will listen in background")
+                self.logger.debug("Will listen in background")
 
                 # Try Vosk VAD first if enabled
                 if self.use_vosk_vad and self.start_vosk_vad():
-                    self.logger.info("Using Vosk VAD for voice activity detection")
+                    self.logger.debug("Using Vosk VAD for voice activity detection")
                 else:
                     # Fall back to speech_recognition VAD
-                    self.logger.info("Using speech_recognition VAD")
+                    self.logger.debug("Using speech_recognition VAD")
                     rec_state.listen_closer = rec_state.rec.listen_in_background(
                         source=rec_state.mic,
                         phrase_time_limit=self.listen_phrase_time_limit,
