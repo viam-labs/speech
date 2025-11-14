@@ -690,7 +690,7 @@ class SpeechIOService(SpeechService, EasyResource):
             )
 
             if match:
-                self.logger.info(
+                self.logger.debug(
                     f"Fuzzy match found: type={trigger_type}, "
                     f"distance={match.distance}, "
                     f"confidence={match.confidence:.2f}, "
