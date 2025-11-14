@@ -2,7 +2,8 @@
 cd `dirname $0`
 
 # Create a virtual environment to run our code
-VENV_NAME="venv"
+# VENV_NAME="venv"
+VENV_NAME=$VIAM_MODULE_DATA/.venv
 PYTHON="$VENV_NAME/bin/python"
 
 # uncomment for hot reloading

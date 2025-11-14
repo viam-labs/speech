@@ -2,11 +2,16 @@
 cd `dirname $0`
 
 # Create a virtual environment to run our code
-VENV_NAME="venv"
+VENV_NAME=$VIAM_MODULE_DATA/.venv
 PYTHON="$VENV_NAME/bin/python"
 ENV_ERROR="This module requires Python >=3.8, pip, and virtualenv to be installed."
 
-apt-get install python3-pip git python3-pyaudio portaudio19-dev alsa-tools alsa-utils flac python3-dev build-essential -y
+if command -v apt-get; then
+  $SUDO apt-get install python3-pip git python3-pyaudio portaudio19-dev alsa-tools alsa-utils flac python3-dev build-essential -y
+else
+  echo "Skipping tool installation because your platform is missing apt-get"
+  echo "If you see failures below, install the equivalent of python3-venv for your system"
+fi
 
 if ! python3 -m venv $VENV_NAME >/dev/null 2>&1; then
     echo "Failed to create virtualenv."
