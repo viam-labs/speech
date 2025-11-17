@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import ClassVar, Mapping, Optional, Protocol, Sequence, Tuple, cast
+from typing import ClassVar, Mapping, Optional, Protocol, Sequence, Tuple, cast, Dict
 from enum import Enum
 import os
 import re
@@ -26,6 +26,9 @@ from gtts import gTTS
 import openai
 import speech_recognition as sr
 from pydub import AudioSegment
+from google.cloud.speech import (
+    RecognizeResponse,
+)
 
 try:
     import vosk
@@ -86,6 +89,7 @@ class SpeechIOService(SpeechService, EasyResource):
     completion_persona: str
     should_listen: bool
     stt_provider: str
+    stt_provider_config: dict = {"show_all": True}
     listen_trigger_say: str
     listen_trigger_completion: str
     listen_trigger_command: str
@@ -124,7 +128,7 @@ class SpeechIOService(SpeechService, EasyResource):
         deps = []
         attrs = struct_to_dict(config.attributes)
         stt_provider = str(attrs.get("stt_provider", ""))
-        if stt_provider != "" and stt_provider != "google":
+        if stt_provider != "" and "google" not in stt_provider:
             deps.append(stt_provider)
         return deps, []
 
@@ -267,7 +271,7 @@ class SpeechIOService(SpeechService, EasyResource):
             self.logger.debug("using stt provider")
             return await self.stt.to_text(speech, format)
 
-        self.logger.debug("using google stt")
+        self.logger.debug(f"using {self.stt_provider} stt")
         if rec_state.rec is not None:
             self.logger.debug("rec_state.rec is not None")
 
@@ -608,13 +612,11 @@ class SpeechIOService(SpeechService, EasyResource):
 
         try:
             self.logger.debug("will convert audio to text")
-            # for testing purposes, we're just using the default API key
-            # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
-            # instead of `r.recognize_google(audio)`
-            transcript = rec_state.rec.recognize_google(audio, show_all=True)
-            self.logger.debug("transcript: " + str(transcript))
-            if type(transcript) is dict and transcript.get("alternative"):
-                heard = transcript["alternative"][0]["transcript"]
+            response = self._recognize(audio)
+            self.logger.debug("transcript: " + str(response))
+
+            if results := self._get_transcripts(response):
+                heard = "".join(result["transcript"] for result in results)
                 self.logger.debug("heard: " + heard)
         except sr.UnknownValueError:
             self.logger.debug("Google Speech Recognition could not understand audio")
@@ -641,12 +643,12 @@ class SpeechIOService(SpeechService, EasyResource):
             return text, None
 
         try:
-            transcript = rec_state.rec.recognize_google(audio, show_all=True)
+            response = self._recognize(audio)
+            self.logger.debug("transcript: " + str(response))
 
-            if type(transcript) is dict and transcript.get("alternative"):
-                alternatives = transcript["alternative"]
-                primary_text = alternatives[0]["transcript"]
-                return primary_text, alternatives
+            if results := self._get_transcripts(response):
+                primary_text = results[0]["transcript"]
+                return primary_text, results
 
         except sr.UnknownValueError:
             self.logger.debug("Google Speech Recognition could not understand audio")
@@ -656,6 +658,28 @@ class SpeechIOService(SpeechService, EasyResource):
             )
 
         return "", None
+
+    def _recognize(self, audio: sr.AudioData):
+        if self.stt_provider == "google":
+            return rec_state.rec.recognize_google(audio, show_all=True, **self.stt_provider_config)
+        if self.stt_provider == "google_cloud":
+            return rec_state.rec.recognize_google_cloud(
+                audio, show_all=True, **self.stt_provider_config
+            )
+
+    def _get_transcripts(self, response: Dict | RecognizeResponse):
+        if isinstance(response, dict):
+            return response.get("alternative")
+        if isinstance(response, RecognizeResponse):
+            return [
+                {
+                    "transcript": result.alternatives[0].transcript,
+                    "confidence": result.alternatives[0].confidence,
+                }
+                for result in response.results
+            ]
+
+        return None
 
     def _check_fuzzy_triggers(
         self, heard: str, alternatives: Optional[list]
@@ -758,6 +782,9 @@ class SpeechIOService(SpeechService, EasyResource):
             openai.organization = self.completion_provider_org
         self.completion_persona = str(attrs.get("completion_persona", ""))
         self.stt_provider = str(attrs.get("stt_provider", "google"))
+        self.stt_provider_config = attrs.get(
+            "stt_provider_config", self.stt_provider_config
+        )
         self.should_listen = bool(attrs.get("listen", False))
         self.listen_phrase_time_limit = attrs.get("listen_phrase_time_limit", None)
         self.mic_device_name = str(attrs.get("mic_device_name", ""))
@@ -824,7 +851,7 @@ class SpeechIOService(SpeechService, EasyResource):
         else:
             self.speech_provider = SpeechProvider.google
 
-        if self.stt_provider != "google":
+        if "google" not in self.stt_provider:
             stt = dependencies[SpeechService.get_resource_name(self.stt_provider)]
             self.stt = cast(SpeechService, stt)
 
@@ -875,3 +902,8 @@ class SpeechIOService(SpeechService, EasyResource):
                         phrase_time_limit=self.listen_phrase_time_limit,
                         callback=self.listen_callback,
                     )
+
+    async def close(self):
+        if rec_state.listen_closer is not None:
+            rec_state.listen_closer(True)
+        self.stop_vosk_vad()
