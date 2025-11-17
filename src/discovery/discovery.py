@@ -1,4 +1,4 @@
-from typing import ClassVar, List, Mapping, Optional, Sequence
+from typing import ClassVar, List, Mapping, Optional, Sequence, Tuple
 
 from typing_extensions import Self
 from viam.logging import getLogger
@@ -36,7 +36,7 @@ class DiscoverDevices(Discovery, EasyResource):
         return super().new(config, dependencies)
 
     @classmethod
-    def validate_config(cls, config: ComponentConfig) -> Sequence[str]:
+    def validate_config(cls, config: ComponentConfig) -> Tuple[Sequence[str], Sequence[str]]:
         """This method allows you to validate the configuration object received from the machine,
         as well as to return any implicit dependencies based on that `config`.
 
@@ -46,7 +46,7 @@ class DiscoverDevices(Discovery, EasyResource):
         Returns:
             Sequence[str]: A list of implicit dependencies
         """
-        return []
+        return [], []
 
     def reconfigure(
         self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]
