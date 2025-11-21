@@ -89,6 +89,7 @@ class SpeechIOService(SpeechService, EasyResource):
     listen_trigger_say: str
     listen_trigger_completion: str
     listen_trigger_command: str
+    listen_trigger_all: bool
     listen_command_buffer_length: int
     mic_device_name: str
     command_list: list
@@ -375,6 +376,11 @@ class SpeechIOService(SpeechService, EasyResource):
                 self.command_list.insert(0, command)
                 self.logger.debug("added to command_list: '" + command + "'")
                 del self.command_list[self.listen_command_buffer_length :]
+            elif self.should_listen and self.listen_trigger_all:
+                # Add all speech detections to command queue without prefix requirement
+                self.command_list.insert(0, text)
+                self.logger.debug("added to command_list (listen_trigger_all): '" + text + "'")
+                del self.command_list[self.listen_command_buffer_length :]
 
     def vosk_vad_thread(self):
         """Vosk VAD thread for voice activity detection"""
@@ -591,6 +597,11 @@ class SpeechIOService(SpeechService, EasyResource):
                 self.command_list.insert(0, command)
                 self.logger.debug("added to command_list: '" + command + "'")
                 del self.command_list[self.listen_command_buffer_length :]
+            elif self.should_listen and self.listen_trigger_all:
+                # Add all speech detections to command queue without prefix requirement
+                self.command_list.insert(0, heard)
+                self.logger.debug("added to command_list (listen_trigger_all): '" + heard + "'")
+                del self.command_list[self.listen_command_buffer_length :]
             if not self.should_listen:
                 # stop listening if not in background listening mode
                 self.logger.debug("will close background listener")
@@ -768,6 +779,7 @@ class SpeechIOService(SpeechService, EasyResource):
         self.listen_trigger_command = str(
             attrs.get("listen_trigger_command", "robot can you")
         )
+        self.listen_trigger_all = bool(attrs.get("listen_trigger_all", False))
         self.listen_command_buffer_length = int(
             attrs.get("listen_command_buffer_length", 10)
         )
