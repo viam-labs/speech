@@ -89,7 +89,7 @@ class SpeechIOService(SpeechService, EasyResource):
     completion_persona: str
     should_listen: bool
     stt_provider: str
-    stt_provider_config: dict = {"show_all": True}
+    stt_provider_config: dict = {}
     listen_trigger_say: str
     listen_trigger_completion: str
     listen_trigger_command: str
@@ -352,20 +352,31 @@ class SpeechIOService(SpeechService, EasyResource):
         # Fall back to existing regex-based matching
         if text != "":
             if (
-                self.should_listen and re.search(".*" + self.listen_trigger_say, text, re.IGNORECASE)
+                self.should_listen
+                and re.search(".*" + self.listen_trigger_say, text, re.IGNORECASE)
             ) or (self.trigger_active and self.active_trigger_type == "say"):
                 self.trigger_active = False
-                to_say = re.sub(".*" + self.listen_trigger_say + r"\s+", "", text, flags=re.IGNORECASE)
+                to_say = re.sub(
+                    ".*" + self.listen_trigger_say + r"\s+",
+                    "",
+                    text,
+                    flags=re.IGNORECASE,
+                )
                 asyncio.run_coroutine_threadsafe(
                     self.say(to_say, blocking=False), self.main_loop
                 )
             elif (
                 self.should_listen
-                and re.search(".*" + self.listen_trigger_completion, text, re.IGNORECASE)
+                and re.search(
+                    ".*" + self.listen_trigger_completion, text, re.IGNORECASE
+                )
             ) or (self.trigger_active and self.active_trigger_type == "completion"):
                 self.trigger_active = False
                 to_say = re.sub(
-                    ".*" + self.listen_trigger_completion + r"\s+", "", text, flags=re.IGNORECASE
+                    ".*" + self.listen_trigger_completion + r"\s+",
+                    "",
+                    text,
+                    flags=re.IGNORECASE,
                 )
                 asyncio.run_coroutine_threadsafe(
                     self.completion(to_say, blocking=False), self.main_loop
@@ -375,7 +386,12 @@ class SpeechIOService(SpeechService, EasyResource):
                 and re.search(".*" + self.listen_trigger_command, text, re.IGNORECASE)
             ) or (self.trigger_active and self.active_trigger_type == "command"):
                 self.trigger_active = False
-                command = re.sub(".*" + self.listen_trigger_command + r"\s+", "", text, flags=re.IGNORECASE)
+                command = re.sub(
+                    ".*" + self.listen_trigger_command + r"\s+",
+                    "",
+                    text,
+                    flags=re.IGNORECASE,
+                )
                 self.command_list.insert(0, command)
                 self.logger.debug("added to command_list: '" + command + "'")
                 del self.command_list[self.listen_command_buffer_length :]
@@ -568,20 +584,31 @@ class SpeechIOService(SpeechService, EasyResource):
             self.logger.debug(f"speechio heard: {heard}")
 
             if (
-                self.should_listen and re.search(".*" + self.listen_trigger_say, heard, re.IGNORECASE)
+                self.should_listen
+                and re.search(".*" + self.listen_trigger_say, heard, re.IGNORECASE)
             ) or (self.trigger_active and self.active_trigger_type == "say"):
                 self.trigger_active = False
-                to_say = re.sub(".*" + self.listen_trigger_say + r"\s+", "", heard, flags=re.IGNORECASE)
+                to_say = re.sub(
+                    ".*" + self.listen_trigger_say + r"\s+",
+                    "",
+                    heard,
+                    flags=re.IGNORECASE,
+                )
                 asyncio.run_coroutine_threadsafe(
                     self.say(to_say, blocking=False), self.main_loop
                 )
             elif (
                 self.should_listen
-                and re.search(".*" + self.listen_trigger_completion, heard, re.IGNORECASE)
+                and re.search(
+                    ".*" + self.listen_trigger_completion, heard, re.IGNORECASE
+                )
             ) or (self.trigger_active and self.active_trigger_type == "completion"):
                 self.trigger_active = False
                 to_say = re.sub(
-                    ".*" + self.listen_trigger_completion + r"\s+", "", heard, flags=re.IGNORECASE
+                    ".*" + self.listen_trigger_completion + r"\s+",
+                    "",
+                    heard,
+                    flags=re.IGNORECASE,
                 )
                 asyncio.run_coroutine_threadsafe(
                     self.completion(to_say, blocking=False), self.main_loop
@@ -591,7 +618,12 @@ class SpeechIOService(SpeechService, EasyResource):
                 and re.search(".*" + self.listen_trigger_command, heard, re.IGNORECASE)
             ) or (self.trigger_active and self.active_trigger_type == "command"):
                 self.trigger_active = False
-                command = re.sub(".*" + self.listen_trigger_command + r"\s+", "", heard, flags=re.IGNORECASE)
+                command = re.sub(
+                    ".*" + self.listen_trigger_command + r"\s+",
+                    "",
+                    heard,
+                    flags=re.IGNORECASE,
+                )
                 self.command_list.insert(0, command)
                 self.logger.debug("added to command_list: '" + command + "'")
                 del self.command_list[self.listen_command_buffer_length :]
@@ -661,7 +693,9 @@ class SpeechIOService(SpeechService, EasyResource):
 
     def _recognize(self, audio: sr.AudioData):
         if self.stt_provider == "google":
-            return rec_state.rec.recognize_google(audio, show_all=True, **self.stt_provider_config)
+            return rec_state.rec.recognize_google(
+                audio, show_all=True, **self.stt_provider_config
+            )
         if self.stt_provider == "google_cloud":
             return rec_state.rec.recognize_google_cloud(
                 audio, show_all=True, **self.stt_provider_config
