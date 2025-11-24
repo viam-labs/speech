@@ -64,11 +64,15 @@ class FuzzyWakeWordMatcher:
     Example:
         >>> matcher = FuzzyWakeWordMatcher(threshold=2)
         >>> alternatives = [
-        ...     {"transcript": "hey robotic turn on lights", "confidence": 0.9}
+        ...     {"transcript": "hey robotic turn on lights", "confidence": 0.9},
+        ...     {"transcript": "hey robot turn on lights", "confidence": 0.95},
+        ...     {"transcript": "hey robbed turn on lights", "confidence": 0.75}
         ... ]
         >>> match = matcher.match_trigger("hey robot", "hey robotic turn on lights", alternatives)
         >>> if match:
-        ...     print(f"Matched with distance {match.distance}: {match.command_text}")
+        ...     # Returns the 0.95 confidence match ("hey robot") even though primary was checked first
+        ...     print(f"Matched '{match.matched_phrase}' (confidence: {match.confidence})")
+        ...     print(f"Command: {match.command_text}")
     """
 
     def __init__(self, threshold: int = 2):
@@ -122,12 +126,20 @@ class FuzzyWakeWordMatcher:
 
         # Try alternatives if provided
         if alternatives and len(alternatives) > 1:
-            for idx, alt in enumerate(
-                alternatives[1:], start=1
-            ):  # Skip first (already checked)
-                if idx >= 5:  # Hardcoded limit
-                    break
+            # Sort alternatives by confidence (descending) to check highest confidence first
+            # Skip index 0 (primary transcript already checked) and create tuples of (original_index, alt)
+            alternatives_with_indices = [
+                (idx, alt) for idx, alt in enumerate(alternatives[1:], start=1)
+            ]
 
+            # Sort by confidence descending
+            sorted_alternatives = sorted(
+                alternatives_with_indices,
+                key=lambda x: x[1].get("confidence", 0.0),
+                reverse=True
+            )
+
+            for original_idx, alt in sorted_alternatives[:4]:  # Check top 4 alternatives
                 alt_text = alt.get("transcript", "")
                 alt_confidence = alt.get("confidence", 0.0)
 
@@ -140,7 +152,7 @@ class FuzzyWakeWordMatcher:
                     normalized_trigger,
                     alt_text,
                     confidence=alt_confidence,
-                    alt_index=idx,
+                    alt_index=original_idx,
                 )
                 if match:
                     return match
