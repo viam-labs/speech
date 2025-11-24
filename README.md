@@ -112,6 +112,19 @@ The following configuration sets up listening mode with local speech-to-text, us
 }
 ```
 
+## Do Commands
+
+The speech module supports the following `do_command` methods:
+
+### `stop_playback`
+
+Immediately stop any current audio playback.
+
+```json
+{
+    "command": "stop_playback"
+}
+```
 
 ## Voice Activity Detection (VAD)
 

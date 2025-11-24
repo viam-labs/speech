@@ -16,7 +16,7 @@ from viam.proto.common import ResourceName
 from viam.resource.base import ResourceBase
 from viam.resource.easy_resource import EasyResource
 from viam.resource.types import Model
-from viam.utils import struct_to_dict
+from viam.utils import struct_to_dict, ValueTypes
 
 import pygame
 from pygame import mixer
@@ -63,6 +63,8 @@ class RecState:
     vosk_stream: Optional[object] = None
     vosk_thread: Optional[threading.Thread] = None
     vosk_stop_event: Optional[threading.Event] = None
+    # Audio playback interrupt flag
+    playback_stop_requested: bool = False
 
 
 CACHEDIR = "/tmp/cache"
@@ -161,12 +163,18 @@ class SpeechIOService(SpeechService, EasyResource):
 
             if not cache_only:
                 mixer.music.load(file)
+                rec_state.playback_stop_requested = False  # Reset stop flag for new playback
                 self.logger.debug("Playing audio...")
                 mixer.music.play()  # Play it
 
                 if blocking:
-                    while mixer.music.get_busy():
-                        pygame.time.Clock().tick()
+                    while mixer.music.get_busy() and not rec_state.playback_stop_requested:
+                        pygame.time.Clock().tick(10)
+
+                    # Reset stop flag after breaking out of loop
+                    if rec_state.playback_stop_requested:
+                        rec_state.playback_stop_requested = False
+                        self.logger.debug("say() blocking loop interrupted by stop request")
 
                 self.logger.debug("Played audio...")
         except RuntimeError as err:
@@ -198,6 +206,33 @@ class SpeechIOService(SpeechService, EasyResource):
 
     async def is_speaking(self) -> bool:
         return mixer.music.get_busy()
+
+    async def stop_playback(self) -> bool:
+        """Stop any currently playing audio.
+
+        This method can be called from any thread to interrupt audio playback.
+        It will stop the current audio immediately and interrupt any blocking
+        wait loops in say().
+
+        Returns:
+            bool: True if playback was stopped, False if nothing was playing
+
+        Example:
+            # From async context
+            await speech_service.stop_playback()
+
+            # From background thread
+            asyncio.run_coroutine_threadsafe(
+                speech_service.stop_playback(),
+                speech_service.main_loop
+            )
+        """
+        if mixer.music.get_busy():
+            rec_state.playback_stop_requested = True
+            mixer.music.stop()
+            self.logger.debug("Playback stopped by external request")
+            return True
+        return False
 
     async def completion(
         self, text: str, blocking: bool, cache_only: bool = False
@@ -936,6 +971,13 @@ class SpeechIOService(SpeechService, EasyResource):
                         phrase_time_limit=self.listen_phrase_time_limit,
                         callback=self.listen_callback,
                     )
+
+    async def do_command(self, command: Mapping[str, ValueTypes], *, timeout: Optional[float] = None, **kwargs) -> Mapping[str, ValueTypes]:
+        if cmd := command.get("command"):
+            if cmd == "stop_playback":
+                stopped = await self.stop_playback()
+                return {"command": cmd, "stopped": stopped}
+        return {"status": "unknown command"}
 
     async def close(self):
         if rec_state.listen_closer is not None:
