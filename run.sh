@@ -5,6 +5,8 @@ VIRTUAL_ENV=$VIAM_MODULE_DATA/.venv
 
 export PATH=$PATH:$HOME/.local/bin
 
+./setup.sh
+
 source $VIRTUAL_ENV/bin/activate
 
 # Be sure to use `exec` so that termination signals reach the python process,

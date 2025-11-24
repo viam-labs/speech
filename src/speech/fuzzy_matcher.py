@@ -136,10 +136,12 @@ class FuzzyWakeWordMatcher:
             sorted_alternatives = sorted(
                 alternatives_with_indices,
                 key=lambda x: x[1].get("confidence", 0.0),
-                reverse=True
+                reverse=True,
             )
 
-            for original_idx, alt in sorted_alternatives[:4]:  # Check top 4 alternatives
+            for original_idx, alt in sorted_alternatives[
+                :4
+            ]:  # Check top 4 alternatives
                 alt_text = alt.get("transcript", "")
                 alt_confidence = alt.get("confidence", 0.0)
 

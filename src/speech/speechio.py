@@ -1,6 +1,7 @@
 from io import BytesIO
 from typing import ClassVar, Mapping, Optional, Protocol, Sequence, Tuple, cast, Dict
 from enum import Enum
+from datetime import datetime
 import os
 import re
 import asyncio
@@ -10,6 +11,7 @@ import pyaudio
 import json
 import time
 from typing_extensions import Self
+import wave
 
 from viam.proto.app.robot import ComponentConfig
 from viam.proto.common import ResourceName
@@ -29,6 +31,8 @@ from pydub import AudioSegment
 from google.cloud.speech import (
     RecognizeResponse,
 )
+import numpy as np
+from scipy import signal
 
 try:
     import vosk
@@ -38,6 +42,10 @@ except ImportError:
     VOSK_AVAILABLE = False
 
 from speech_service_api import SpeechService
+
+AUDIO_DIR = os.environ.get(
+    "VIAM_MODULE_DATA", os.path.join(os.path.expanduser("~"), ".data", "audio")
+)
 
 
 class SpeechProvider(str, Enum):
@@ -163,18 +171,24 @@ class SpeechIOService(SpeechService, EasyResource):
 
             if not cache_only:
                 mixer.music.load(file)
-                rec_state.playback_stop_requested = False  # Reset stop flag for new playback
+                rec_state.playback_stop_requested = (
+                    False  # Reset stop flag for new playback
+                )
                 self.logger.debug("Playing audio...")
                 mixer.music.play()  # Play it
 
                 if blocking:
-                    while mixer.music.get_busy() and not rec_state.playback_stop_requested:
+                    while (
+                        mixer.music.get_busy() and not rec_state.playback_stop_requested
+                    ):
                         pygame.time.Clock().tick(10)
 
                     # Reset stop flag after breaking out of loop
                     if rec_state.playback_stop_requested:
                         rec_state.playback_stop_requested = False
-                        self.logger.debug("say() blocking loop interrupted by stop request")
+                        self.logger.debug(
+                            "say() blocking loop interrupted by stop request"
+                        )
 
                 self.logger.debug("Played audio...")
         except RuntimeError as err:
@@ -577,6 +591,38 @@ class SpeechIOService(SpeechService, EasyResource):
         if rec_state.vosk_stream:
             rec_state.vosk_stream.close()
 
+    def _apply_highpass(self, audio, sample_rate, cutoff=80):
+        sos = signal.butter(4, cutoff, "hp", fs=sample_rate, output="sos")
+        return signal.sosfilt(sos, audio)
+
+    def _preprocess_audio(self, audio_data, target_db=-20):
+        """Normalize audio and apply gain"""
+        # Convert to numpy array
+        audio = np.frombuffer(audio_data.get_raw_data(), dtype=np.int16).astype(
+            np.float32
+        )
+
+        # Normalize to prevent clipping
+        audio = audio / 32768.0
+
+        # Highpass filter
+        # audio = self._apply_highpass(audio, audio_data.sample_rate)
+
+        # Calculate current RMS and target RMS
+        current_rms = np.sqrt(np.mean(audio**2))
+        target_rms = 10 ** (target_db / 20)
+        gain = target_rms / (current_rms + 1e-10)
+
+        # Apply gain with clipping protection
+        audio = np.clip(audio * gain, -1.0, 1.0)
+
+        # Convert back to int16
+        audio = (audio * 32767).astype(np.int16)
+
+        return sr.AudioData(
+            audio.tobytes(), audio_data.sample_rate, audio_data.sample_width
+        )
+
     def listen_callback(self, recognizer, audio):
         """Process audio with optional fuzzy trigger matching."""
         if not self.main_loop or not self.main_loop.is_running():
@@ -584,6 +630,10 @@ class SpeechIOService(SpeechService, EasyResource):
             return
 
         self.logger.debug("Listen callback got audio")
+
+        # self.logger.debug("Preprocessing audio")
+        # audio = self._preprocess_audio(audio)
+        # self.logger.debug("Preprocessing complete")
 
         # Get transcript with alternatives if fuzzy matching is enabled
         if self.listen_trigger_fuzzy_matching and self.fuzzy_matcher:
@@ -719,6 +769,9 @@ class SpeechIOService(SpeechService, EasyResource):
 
         except sr.UnknownValueError:
             self.logger.debug("Google Speech Recognition could not understand audio")
+            if self.save_failed_audio:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                save_audio(audio, f"{AUDIO_DIR}/raw_{timestamp}.wav")
         except sr.RequestError as e:
             self.logger.error(
                 f"Could not request results from Google Speech Recognition: {e}"
@@ -885,6 +938,15 @@ class SpeechIOService(SpeechService, EasyResource):
         self.listen_trigger_fuzzy_threshold = int(
             attrs.get("listen_trigger_fuzzy_threshold", 2)
         )
+        self.adjust_for_ambient_noise = bool(
+            attrs.get("adjust_for_ambient_noise", True)
+        )
+        self.save_failed_audio = bool(attrs.get("save_failed_audio", False))
+
+        # Stop any existing VAD
+        if rec_state.listen_closer is not None:
+            rec_state.listen_closer(True)
+        self.stop_vosk_vad()
 
         # Validate threshold
         if not 0 <= self.listen_trigger_fuzzy_threshold <= 5:
@@ -938,11 +1000,6 @@ class SpeechIOService(SpeechService, EasyResource):
         rec_state.rec = sr.Recognizer()
 
         if not self.disable_mic:
-            # Stop any existing VAD
-            if rec_state.listen_closer is not None:
-                rec_state.listen_closer(True)
-            self.stop_vosk_vad()
-
             # Set up speech recognition
             rec_state.rec.dynamic_energy_threshold = True
 
@@ -953,8 +1010,9 @@ class SpeechIOService(SpeechService, EasyResource):
             else:
                 rec_state.mic = sr.Microphone()
 
-            with rec_state.mic as source:
-                rec_state.rec.adjust_for_ambient_noise(source, 2)
+            if self.adjust_for_ambient_noise:
+                with rec_state.mic as source:
+                    rec_state.rec.adjust_for_ambient_noise(source, 2)
 
             # set up background listening if desired
             if self.should_listen:
@@ -972,7 +1030,13 @@ class SpeechIOService(SpeechService, EasyResource):
                         callback=self.listen_callback,
                     )
 
-    async def do_command(self, command: Mapping[str, ValueTypes], *, timeout: Optional[float] = None, **kwargs) -> Mapping[str, ValueTypes]:
+    async def do_command(
+        self,
+        command: Mapping[str, ValueTypes],
+        *,
+        timeout: Optional[float] = None,
+        **kwargs,
+    ) -> Mapping[str, ValueTypes]:
         if cmd := command.get("command"):
             if cmd == "stop_playback":
                 stopped = await self.stop_playback()
@@ -983,3 +1047,12 @@ class SpeechIOService(SpeechService, EasyResource):
         if rec_state.listen_closer is not None:
             rec_state.listen_closer(True)
         self.stop_vosk_vad()
+
+
+def save_audio(audio_data, filename):
+    """Save AudioData to WAV file"""
+    with wave.open(filename, "wb") as wf:
+        wf.setnchannels(1)  # Mono
+        wf.setsampwidth(audio_data.sample_width)
+        wf.setframerate(audio_data.sample_rate)
+        wf.writeframes(audio_data.get_raw_data())
