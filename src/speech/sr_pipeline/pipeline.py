@@ -88,7 +88,7 @@ class AudioPipeline:
 
     def start(self) -> None:
         """Start all pipeline threads."""
-        self.logger.info("Starting audio pipeline")
+        self.logger.debug("Starting audio pipeline")
         if self._running:
             raise RuntimeError("Pipeline already running")
 
@@ -107,15 +107,15 @@ class AudioPipeline:
             ),
         ]
 
-        self.logger.info("Starting threads")
+        self.logger.debug("Starting threads")
         for t in self._threads:
             t.start()
 
     def stop(self, timeout: float = 2.0) -> None:
         """Stop all pipeline threads gracefully."""
-        self.logger.info("Stopping audio pipeline")
+        self.logger.debug("Stopping audio pipeline")
         if not self._running:
-            self.logger.info("Pipeline not running")
+            self.logger.debug("Pipeline not running")
             return
 
         self._running = False
@@ -123,19 +123,19 @@ class AudioPipeline:
 
         # Send poison pills to unblock queue.get()
         try:
-            self.logger.info("Stopping capture queue")
+            self.logger.debug("Stopping capture queue")
             self._capture_queue.put_nowait(None)
         except queue.Full:
             pass
 
         try:
-            self.logger.info("Stopping utterance queue")
+            self.logger.debug("Stopping utterance queue")
             self._utterance_queue.put_nowait(None)
         except queue.Full:
             pass
 
         # Wait for threads
-        self.logger.info("Stopping threads")
+        self.logger.debug("Stopping threads")
         for t in self._threads:
             t.join(timeout=timeout)
 
@@ -218,7 +218,7 @@ class AudioPipeline:
 
             # Run VAD
             try:
-                self.logger.info("Checking audio for voice activity")
+                self.logger.debug("Checking audio for voice activity")
                 vad_result = self.vad.process(chunk)
             except Exception as e:
                 self.on_error(e)
@@ -231,7 +231,7 @@ class AudioPipeline:
             if state == "idle":
                 padding_buffer.append(chunk)
                 if is_speech:
-                    self.logger.info("Voice activity detected")
+                    self.logger.debug("Voice activity detected")
                     # Start speaking
                     state = "speaking"
                     speech_start_time = now
@@ -249,14 +249,14 @@ class AudioPipeline:
 
                 if silence_duration >= SILENCE_TIMEOUT:
                     # Silence timeout - emit utterance
-                    self.logger.info("Silence detected")
+                    self.logger.debug("Silence detected")
                     self._emit_utterance(utterance_chunks, speech_start_time, now)
                     state = "idle"
                     utterance_chunks = []
                     padding_buffer.clear()
                     self.vad.reset()
                 elif speech_duration >= MAX_SPEECH_DURATION:
-                    self.logger.info("Hit max speech duration")
+                    self.logger.debug("Hit max speech duration")
                     # Max duration - force emit
                     self._emit_utterance(utterance_chunks, speech_start_time, now)
                     state = "idle"
@@ -312,9 +312,9 @@ class AudioPipeline:
             try:
                 # Recognition - releases GIL during network I/O
                 if self.on_utterance:
-                    self.logger.info("Calling on_utterance with speech audio")
+                    self.logger.debug("Calling on_utterance with speech audio")
                     self.on_utterance(utterance)
-                    self.logger.info("Finished processing speech audio")
+                    self.logger.debug("Finished processing speech audio")
                 else:
                     text = self.recognizer.recognize_google(
                         utterance.audio, **self.recognizer_options

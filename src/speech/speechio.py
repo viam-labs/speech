@@ -596,7 +596,7 @@ class SpeechIOService(SpeechService, EasyResource):
             self.logger.error("Main event loop is not available for STT task.")
             return
 
-        self.logger.info("Listen callback got audio")
+        self.logger.debug("Listen callback got audio")
 
         # Get transcript with alternatives if fuzzy matching is enabled
         if self.listen_trigger_fuzzy_matching and self.fuzzy_matcher:
@@ -611,11 +611,11 @@ class SpeechIOService(SpeechService, EasyResource):
 
             # Try fuzzy matching
             if heard:
-                self.logger.info(f"speechio heard: {heard}")
+                self.logger.debug(f"speechio heard: {heard}")
                 match = self._check_fuzzy_triggers(heard, alternatives)
                 if match:
                     self._handle_trigger_match(match)
-                    return
+                return
         else:
             # Use existing regex-based matching
             future = asyncio.run_coroutine_threadsafe(
@@ -727,7 +727,7 @@ class SpeechIOService(SpeechService, EasyResource):
             self.logger.debug("transcript: " + str(response))
 
             if results := self._get_transcripts(response):
-                self.logger.info(f"Transcript results: {results}")
+                self.logger.debug(f"Transcript results: {results}")
                 primary_text = results[0]["transcript"]
                 return primary_text, results
 
@@ -757,7 +757,7 @@ class SpeechIOService(SpeechService, EasyResource):
         if isinstance(response, dict):
             return response.get("alternative")
         if isinstance(response, RecognizeResponse) and response.results:
-            self.logger.info(f"RecognizeResponse results: {response.results}")
+            self.logger.debug(f"RecognizeResponse results: {response.results}")
             return [
                 {
                     "transcript": result.alternatives[0].transcript,
@@ -993,10 +993,6 @@ class SpeechIOService(SpeechService, EasyResource):
                     self.sr_pipeline = AudioPipeline(
                         logger=self.logger,
                         recognizer=rec_state.rec,
-                        recognizer_options={
-                            "show_all": True,
-                            **self.stt_provider_config,
-                        },
                         source=rec_state.mic,
                         on_error=lambda err: self.logger.error(
                             f"sr_pipeline error: {err}"
@@ -1007,23 +1003,6 @@ class SpeechIOService(SpeechService, EasyResource):
                     )
 
                     def pipeline_closer(wait_for_stop=True):
-                        m = self.sr_pipeline.metrics
-                        self.logger.info("\n" + "=" * 60)
-                        self.logger.info("Final Statistics")
-                        self.logger.info("=" * 60)
-                        self.logger.info(f"Chunks captured:        {m.chunks_captured}")
-                        self.logger.info(
-                            f"Chunks dropped:         {m.chunks_dropped} ({m.drop_rate:.1%})"
-                        )
-                        self.logger.info(
-                            f"Utterances detected:    {m.utterances_detected}"
-                        )
-                        self.logger.info(
-                            f"Utterances transcribed: {m.utterances_transcribed}"
-                        )
-                        self.logger.info(
-                            f"Transcription errors:   {m.transcription_errors}"
-                        )
                         self.sr_pipeline.stop()
 
                     rec_state.listen_closer = pipeline_closer
