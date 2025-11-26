@@ -31,8 +31,7 @@ from pydub import AudioSegment
 from google.cloud.speech import (
     RecognizeResponse,
 )
-import numpy as np
-from scipy import signal
+from .sr_pipeline import AudioPipeline
 
 try:
     import vosk
@@ -591,49 +590,13 @@ class SpeechIOService(SpeechService, EasyResource):
         if rec_state.vosk_stream:
             rec_state.vosk_stream.close()
 
-    def _apply_highpass(self, audio, sample_rate, cutoff=80):
-        sos = signal.butter(4, cutoff, "hp", fs=sample_rate, output="sos")
-        return signal.sosfilt(sos, audio)
-
-    def _preprocess_audio(self, audio_data, target_db=-20):
-        """Normalize audio and apply gain"""
-        # Convert to numpy array
-        audio = np.frombuffer(audio_data.get_raw_data(), dtype=np.int16).astype(
-            np.float32
-        )
-
-        # Normalize to prevent clipping
-        audio = audio / 32768.0
-
-        # Highpass filter
-        # audio = self._apply_highpass(audio, audio_data.sample_rate)
-
-        # Calculate current RMS and target RMS
-        current_rms = np.sqrt(np.mean(audio**2))
-        target_rms = 10 ** (target_db / 20)
-        gain = target_rms / (current_rms + 1e-10)
-
-        # Apply gain with clipping protection
-        audio = np.clip(audio * gain, -1.0, 1.0)
-
-        # Convert back to int16
-        audio = (audio * 32767).astype(np.int16)
-
-        return sr.AudioData(
-            audio.tobytes(), audio_data.sample_rate, audio_data.sample_width
-        )
-
     def listen_callback(self, recognizer, audio):
         """Process audio with optional fuzzy trigger matching."""
         if not self.main_loop or not self.main_loop.is_running():
             self.logger.error("Main event loop is not available for STT task.")
             return
 
-        self.logger.debug("Listen callback got audio")
-
-        # self.logger.debug("Preprocessing audio")
-        # audio = self._preprocess_audio(audio)
-        # self.logger.debug("Preprocessing complete")
+        self.logger.info("Listen callback got audio")
 
         # Get transcript with alternatives if fuzzy matching is enabled
         if self.listen_trigger_fuzzy_matching and self.fuzzy_matcher:
@@ -648,7 +611,7 @@ class SpeechIOService(SpeechService, EasyResource):
 
             # Try fuzzy matching
             if heard:
-                self.logger.debug(f"speechio heard: {heard}")
+                self.logger.info(f"speechio heard: {heard}")
                 match = self._check_fuzzy_triggers(heard, alternatives)
                 if match:
                     self._handle_trigger_match(match)
@@ -764,6 +727,7 @@ class SpeechIOService(SpeechService, EasyResource):
             self.logger.debug("transcript: " + str(response))
 
             if results := self._get_transcripts(response):
+                self.logger.info(f"Transcript results: {results}")
                 primary_text = results[0]["transcript"]
                 return primary_text, results
 
@@ -792,7 +756,8 @@ class SpeechIOService(SpeechService, EasyResource):
     def _get_transcripts(self, response: Dict | RecognizeResponse):
         if isinstance(response, dict):
             return response.get("alternative")
-        if isinstance(response, RecognizeResponse):
+        if isinstance(response, RecognizeResponse) and response.results:
+            self.logger.info(f"RecognizeResponse results: {response.results}")
             return [
                 {
                     "transcript": result.alternatives[0].transcript,
@@ -942,6 +907,8 @@ class SpeechIOService(SpeechService, EasyResource):
             attrs.get("adjust_for_ambient_noise", True)
         )
         self.save_failed_audio = bool(attrs.get("save_failed_audio", False))
+        self.use_sr_pipeline = bool(attrs.get("use_sr_pipeline", False))
+        self.stt_timeout = int(attrs.get("stt_timeout", 7))
 
         # Stop any existing VAD
         if rec_state.listen_closer is not None:
@@ -998,6 +965,7 @@ class SpeechIOService(SpeechService, EasyResource):
                 mixer.quit()
 
         rec_state.rec = sr.Recognizer()
+        rec_state.rec.operation_timeout = self.stt_timeout
 
         if not self.disable_mic:
             # Set up speech recognition
@@ -1021,6 +989,45 @@ class SpeechIOService(SpeechService, EasyResource):
                 # Try Vosk VAD first if enabled
                 if self.use_vosk_vad and self.start_vosk_vad():
                     self.logger.debug("Using Vosk VAD for voice activity detection")
+                elif self.use_sr_pipeline:
+                    self.sr_pipeline = AudioPipeline(
+                        logger=self.logger,
+                        recognizer=rec_state.rec,
+                        recognizer_options={
+                            "show_all": True,
+                            **self.stt_provider_config,
+                        },
+                        source=rec_state.mic,
+                        on_error=lambda err: self.logger.error(
+                            f"sr_pipeline error: {err}"
+                        ),
+                        on_utterance=lambda utterance: self.listen_callback(
+                            None, utterance.audio
+                        ),
+                    )
+
+                    def pipeline_closer(wait_for_stop=True):
+                        m = self.sr_pipeline.metrics
+                        self.logger.info("\n" + "=" * 60)
+                        self.logger.info("Final Statistics")
+                        self.logger.info("=" * 60)
+                        self.logger.info(f"Chunks captured:        {m.chunks_captured}")
+                        self.logger.info(
+                            f"Chunks dropped:         {m.chunks_dropped} ({m.drop_rate:.1%})"
+                        )
+                        self.logger.info(
+                            f"Utterances detected:    {m.utterances_detected}"
+                        )
+                        self.logger.info(
+                            f"Utterances transcribed: {m.utterances_transcribed}"
+                        )
+                        self.logger.info(
+                            f"Transcription errors:   {m.transcription_errors}"
+                        )
+                        self.sr_pipeline.stop()
+
+                    rec_state.listen_closer = pipeline_closer
+                    self.sr_pipeline.start()
                 else:
                     # Fall back to speech_recognition VAD
                     self.logger.debug("Using speech_recognition VAD")
