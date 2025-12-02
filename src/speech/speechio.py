@@ -31,7 +31,8 @@ from pydub import AudioSegment
 from google.cloud.speech import (
     RecognizeResponse,
 )
-from .sr_pipeline import AudioPipeline
+from hearken import Listener, EnergyVAD
+from hearken.adapters.sr import SpeechRecognitionSource
 
 try:
     import vosk
@@ -307,8 +308,17 @@ class SpeechIOService(SpeechService, EasyResource):
 
     async def listen(self) -> str:
         if rec_state.rec is not None and rec_state.mic is not None:
-            with rec_state.mic as source:
-                audio = rec_state.rec.listen(source)
+            if self.use_new_listener:
+                if segment := self.listener.wait_for_speech():
+                    audio = sr.AudioData(
+                        segment.audio_data, segment.sample_rate, segment.sample_width
+                    )
+                else:
+                    return ""
+            else:
+                with rec_state.mic as source:
+                    audio = rec_state.rec.listen(source)
+
             return await self.convert_audio_to_text(audio)
 
         self.logger.debug("Nothing to listen to")
@@ -907,7 +917,7 @@ class SpeechIOService(SpeechService, EasyResource):
             attrs.get("adjust_for_ambient_noise", True)
         )
         self.save_failed_audio = bool(attrs.get("save_failed_audio", False))
-        self.use_sr_pipeline = bool(attrs.get("use_sr_pipeline", False))
+        self.use_new_listener = bool(attrs.get("use_new_listener", False))
         self.stt_timeout = int(attrs.get("stt_timeout", 7))
 
         # Stop any existing VAD
@@ -989,24 +999,30 @@ class SpeechIOService(SpeechService, EasyResource):
                 # Try Vosk VAD first if enabled
                 if self.use_vosk_vad and self.start_vosk_vad():
                     self.logger.debug("Using Vosk VAD for voice activity detection")
-                elif self.use_sr_pipeline:
-                    self.sr_pipeline = AudioPipeline(
-                        logger=self.logger,
-                        recognizer=rec_state.rec,
-                        source=rec_state.mic,
-                        on_error=lambda err: self.logger.error(
-                            f"sr_pipeline error: {err}"
+                elif self.use_new_listener:
+                    self.listener = Listener(
+                        source=SpeechRecognitionSource(rec_state.mic),
+                        vad=EnergyVAD(
+                            threshold=rec_state.rec.energy_threshold, dynamic=True
                         ),
-                        on_utterance=lambda utterance: self.listen_callback(
-                            None, utterance.audio
+                        on_error=lambda err: self.logger.error(
+                            f"new listener error: {err}"
+                        ),
+                        on_speech=lambda segment: self.listen_callback(
+                            None,
+                            sr.AudioData(
+                                segment.audio_data,
+                                segment.sample_rate,
+                                segment.sample_width,
+                            ),
                         ),
                     )
 
                     def pipeline_closer(wait_for_stop=True):
-                        self.sr_pipeline.stop()
+                        self.listener.stop()
 
                     rec_state.listen_closer = pipeline_closer
-                    self.sr_pipeline.start()
+                    self.listener.start()
                 else:
                     # Fall back to speech_recognition VAD
                     self.logger.debug("Using speech_recognition VAD")
