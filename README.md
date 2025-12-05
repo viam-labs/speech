@@ -50,6 +50,7 @@ On the new component panel, copy and paste the following attribute template into
   "completion_persona": "<PERSONA>",
   "listen": true,
   "stt_provider": "google",
+  "stt_provider_config": {},
   "use_vosk_vad": false,
   "listen_trigger_say": "<TRIGGER-PHRASE>",
   "listen_trigger_completion": "<COMPLETION-PHRASE>",
@@ -80,7 +81,8 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | `completion_provider_key`  | string | Optional | Your key for the completion provider. Default: `""`. |
 | `completion_persona`  | string | Optional | If set, will pass "As <completion_persona> respond to '<completion_text>'" to all completion() requests. Default: `""`. |
 | `listen`  | boolean | Optional | If set to true and the robot as an available microphone device, will enable listening in the background.<br><br>If enabled, it will respond to configured [listen_trigger_say](#listen_trigger_say), [listen_trigger_completion](#listen_trigger_completion) and [listen_trigger_command](#listen_trigger_command), based on input audio being converted to text.<br><br>If *listen* is enabled and [listen_triggers_active](#listen_triggers_active) is disabled, triggers will occur when [listen_trigger](#listen_trigger) is called.<br><br>Note that background (ambient) noise and microphone quality are important factors in the quality of the STT conversion.<br><br>Currently, Google STT is leveraged. Default: `false`. |
-| `stt_provider`  | string | Optional | This can be set to the name of a configured speech service that provides a `to_text` command, like [`stt-vosk`](https://app.viam.com/module/viam-labs/stt-vosk)\*. Otherwise, the Google STT API will be used. Default: `"google"`. |
+| `stt_provider`  | string | Optional | This can be set to the name of a configured speech service that provides a `to_text` command, like [`stt-vosk`](https://app.viam.com/module/viam-labs/stt-vosk)\*. Or set it to "google_cloud" to use the Google Cloud Speech-to-Text API. Otherwise, the Google STT API will be used. Default: `"google"`. |
+| `stt_provider_config`  | object | Optional | This can be used to configure a built-in Speech-to-Text provider ("google" or "google_cloud"). See more details in the full README.  |
 | `listen_phrase_time_limit`  | float | Optional | The maximum number of seconds that this will allow a phrase to continue before stopping and returning the part of the phrase processed before the time limit was reached.<br><br>The resulting audio will be the phrase cut off at the time limit.<br><br>If phrase_timeout is None, there will be no phrase time limit.<br><br>Note: if you are seeing instance where phrases are not being returned for much longer than you expect, try changing this to ~5 or so. **Works with both default VAD and Vosk VAD.** Default: `None`. |
 | `listen_trigger_say`  | string | Optional | If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_say* will be converted to speech and repeated back by the robot. Default: `"robot say"`. |
 | `listen_trigger_completion`  | string | Optional | If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_completion* will be sent to the completion provider (if configured), converted to speech, and repeated back by the robot. Default: `"hey robot"`. |
@@ -111,6 +113,19 @@ The following configuration sets up listening mode with local speech-to-text, us
 }
 ```
 
+## Do Commands
+
+The speech module supports the following `do_command` methods:
+
+### `stop_playback`
+
+Immediately stop any current audio playback.
+
+```json
+{
+    "command": "stop_playback"
+}
+```
 
 ## Voice Activity Detection (VAD)
 
@@ -190,6 +205,31 @@ The system automatically checks alternative transcriptions from Google Speech Re
 
 **Not working at all?** Check that fuzzy matching is enabled and logs don't show import errors.
 
+## Speech-to-Text Provider Configuration
+
+The `stt_provider_config` attribute in the speech service configuration can be used to set or override the fields on a speech recognition request to built-in providers, such as "google" and "google_cloud".
+
+### "google" configuration
+
+This provider sends requests to the public Google Speech Recognition API.
+
+| Attribute | Default | Description |
+|-----------|---------|-------------|
+| `key` | None | Set a custom API key to be used. [Learn more about getting an API key](https://www.chromium.org/developers/how-tos/api-keys/) |
+| `language` | `en-US` | Set the language for the transcription. [Available options here](https://stackoverflow.com/questions/14257598/what-are-language-codes-in-chromes-implementation-of-the-html5-speech-recogniti/14302134#14302134) |
+| `pfilter` | 0 | Adjust the profanity filer: 0 - no filter, 1 - only show the first character and replace the rest with astericks |
+
+### "google_cloud" configuration
+
+This provider sends requests to the Google Cloud Speech-to-Text API V1.
+
+| Attribute | Default | Description |
+|-----------|---------|-------------|
+| `credentials_json_path` | None | File path to the [service account key configuration](https://cloud.google.com/docs/authentication/set-up-adc-local-dev-environment#local-key) to be used to authenticate with Google Cloud. The service account required the Service Usage Consumer role. [Learn more](https://docs.cloud.google.com/speech-to-text/docs/v1/transcribe-client-libraries) |
+| `language_code` | `"en-US"` | Set the language for the transcription. [Available options here](https://stackoverflow.com/questions/14257598/what-are-language-codes-in-chromes-implementation-of-the-html5-speech-recogniti/14302134#14302134) |
+| `model` | `"default"` | Which transcription model to use. [See options here](https://cloud.google.com/speech-to-text/docs/reference/rest/v1/RecognitionConfig) |
+| `use_enhanced` | `false` | Set to `true` to use an "enhanced" speech recognition model. This can only be used in combination with the `"phone_call"` or `"video"` model selection. |
+| `preferred_phrases` | None | Provide a list of strings containing words or phrases "hints" so the speech recognition is more likely to recognize them. |
 
 ## Configure the `discovery service`
 

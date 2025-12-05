@@ -36,7 +36,9 @@ class DiscoverDevices(Discovery, EasyResource):
         return super().new(config, dependencies)
 
     @classmethod
-    def validate_config(cls, config: ComponentConfig) -> Tuple[Sequence[str], Sequence[str]]:
+    def validate_config(
+        cls, config: ComponentConfig
+    ) -> Tuple[Sequence[str], Sequence[str]]:
         """This method allows you to validate the configuration object received from the machine,
         as well as to return any implicit dependencies based on that `config`.
 
@@ -76,9 +78,11 @@ class DiscoverDevices(Discovery, EasyResource):
                 name="speech-1",
                 api=str(SpeechService.API),
                 model="viam-labs:speech:speechio",
-                attributes=dict_to_struct({
-                    "mic_device_name": mic,
-                }),
+                attributes=dict_to_struct(
+                    {
+                        "mic_device_name": mic,
+                    }
+                ),
             )
             configs.append(config)
 
