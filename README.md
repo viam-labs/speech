@@ -42,6 +42,7 @@ On the new component panel, copy and paste the following attribute template into
 {
   "speech_provider": "google|elevenlabs",
   "speech_provider_key": "<SECRET-KEY>",
+  "speech_generation_config": {},
   "speech_voice": "<VOICE-OPTION>",
   "completion_provider": "openai",
   "completion_model": "gpt-4|gpt-3.5-turbo",
@@ -75,6 +76,7 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | `speech_provider` | string | Optional | The speech provider for the voice service: `"google"` or `"elevenlabs"`. Default: `"google"`.  |
 | `speech_provider_key` | string | **Required** | The secret key for the provider - only required for elevenlabs. Default: `""`. |
 | `speech_voice`  | string | Optional | If the speech_provider (example: elevenlabs) provides voice options, you can select the voice here. Default: `"Josh"`. |
+| `speech_generation_config`  | object | Optional | This can be used to configure a built-in Text-to-Speech provider ("google" or "elevenlabs"). See more details in the full README.  |
 | `completion_provider`  | string | Optional | `"openai"`. Other providers may be supported in the future. [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided. Default: `"openai"`. |
 | `completion_model`  | string | Optional | `gpt-4o`, `gpt-4o-mini`, etc. [completion_provider_org](#completion_provider_org) and [completion_provider_key](#completion_provider_key) must also be provided. Default: `"gpt-4o"`. |
 | `completion_provider_org`  | string | Optional | Your org for the completion provider. Default: `""`. |
@@ -230,6 +232,29 @@ This provider sends requests to the Google Cloud Speech-to-Text API V1.
 | `model` | `"default"` | Which transcription model to use. [See options here](https://cloud.google.com/speech-to-text/docs/reference/rest/v1/RecognitionConfig) |
 | `use_enhanced` | `false` | Set to `true` to use an "enhanced" speech recognition model. This can only be used in combination with the `"phone_call"` or `"video"` model selection. |
 | `preferred_phrases` | None | Provide a list of strings containing words or phrases "hints" so the speech recognition is more likely to recognize them. |
+
+## Text-to-Speech Generation Configuration
+
+The `speech_generation_config` attribute in the speech service configuration can be used to set or override the fields on a speech generation request to built-in providers, such as "google" and "elevenlabs".
+
+### "google" configuration
+
+This provider sends requests to the public Google Translate's Text-to-Speech API
+
+| Attribute | Default | Description |
+|-----------|---------|-------------|
+| `lang` | `"en"` | Set the language for the generated speech. [Available options here](https://en.wikipedia.org/wiki/IETF_language_tag#List_of_common_primary_language_subtags) |
+| `slow` | `false` | Reads text more slowly. |
+
+### "elevenlabs" configuration
+
+This provider sends requests to ElevenLabs' Text-to-Speech API
+
+| Attribute | Default | Description |
+|-----------|---------|-------------|
+| `voice_id` | `"DWRB4weeqtqHSoQLvPTd"` (Josh) | ID for voice from [voice library](https://elevenlabs.io/app/voice-library) |
+| `model_id` | `"eleven_multilingual_v2"` | Set the model for the generation. [Available options here](https://elevenlabs.io/docs/overview/models) |
+
 
 ## Configure the `discovery service`
 

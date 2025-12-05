@@ -1,6 +1,7 @@
 from io import BytesIO
 from typing import (
     ClassVar,
+    Iterator,
     Mapping,
     Optional,
     Protocol,
@@ -119,7 +120,7 @@ class SpeechIOService(SpeechService, EasyResource):
     active_trigger_type: str
     disable_mic: bool
     disable_audioout: bool
-    eleven_client: dict = {}
+    eleven_client: Mapping[str, ElevenLabs] = {}
     main_loop: Optional[asyncio.AbstractEventLoop] = None
     listen_trigger_fuzzy_matching: bool
     listen_trigger_fuzzy_threshold: int
@@ -170,12 +171,12 @@ class SpeechIOService(SpeechService, EasyResource):
         try:
             if not os.path.isfile(file):  # read from cache if it exists
                 if self.speech_provider == "elevenlabs":
-                    audio = self.eleven_client["client"].generate(
-                        text=text, voice=self.speech_voice
+                    audio = self.eleven_client["client"].text_to_speech.convert(
+                        text=text, **self.speech_generation_config
                     )
                     eleven_save(audio=audio, filename=file)
                 else:
-                    sp = gTTS(text=text, lang="en", slow=False)
+                    sp = gTTS(text=text, **self.speech_generation_config)
                     sp.save(file)
 
             if not cache_only:
@@ -387,13 +388,15 @@ class SpeechIOService(SpeechService, EasyResource):
 
     async def to_speech(self, text):
         if self.speech_provider == "elevenlabs":
-            audio = self.eleven_client["client"].generate(
-                text=text, voice=self.speech_voice
+            audio = self.eleven_client["client"].text_to_speech.convert(
+                text=text, **self.speech_generation_config
             )
+            if isinstance(audio, Iterator):
+                audio = b"".join(audio)
             return audio
         else:
             mp3_fp = BytesIO()
-            sp = gTTS(text=text, lang="en", slow=False)
+            sp = gTTS(text=text, **self.speech_generation_config)
             sp.write_to_fp(mp3_fp)
             return mp3_fp.getvalue()
 
@@ -876,7 +879,13 @@ class SpeechIOService(SpeechService, EasyResource):
             str(attrs.get("speech_provider", "google"))
         ]
         self.speech_provider_key = str(attrs.get("speech_provider_key", ""))
-        self.speech_voice = str(attrs.get("speech_voice", "Josh"))
+        self.speech_voice = str(attrs.get("speech_voice", "DWRB4weeqtqHSoQLvPTd"))
+        self.speech_generation_config = attrs.get(
+            "speech_generation_config",
+            {"voice_id": self.speech_voice}
+            if self.speech_provider == "elevenlabs"
+            else {"lang": "en", "slow": False},
+        )
         self.completion_provider = CompletionProvider[
             str(attrs.get("completion_provider", "openai"))
         ]
