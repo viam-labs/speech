@@ -1,4 +1,4 @@
-elevenlabs~=1.10.0
+elevenlabs~=2.25.0
 gtts~=2.5.3
 pyaudio~=0.2.14
 openai~=1.51.2
