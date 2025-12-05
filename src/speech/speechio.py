@@ -1,5 +1,14 @@
 from io import BytesIO
-from typing import ClassVar, Mapping, Optional, Protocol, Sequence, Tuple, cast, Dict
+from typing import (
+    ClassVar,
+    Mapping,
+    Optional,
+    Protocol,
+    Sequence,
+    Tuple,
+    cast,
+    Dict,
+)
 from enum import Enum
 from datetime import datetime
 import os
@@ -31,7 +40,7 @@ from pydub import AudioSegment
 from google.cloud.speech import (
     RecognizeResponse,
 )
-from hearken import Listener, EnergyVAD
+from hearken import Listener, EnergyVAD, WebRTCVAD, SileroVAD
 from hearken.adapters.sr import SpeechRecognitionSource
 
 try:
@@ -913,12 +922,11 @@ class SpeechIOService(SpeechService, EasyResource):
         self.listen_trigger_fuzzy_threshold = int(
             attrs.get("listen_trigger_fuzzy_threshold", 2)
         )
-        self.adjust_for_ambient_noise = bool(
-            attrs.get("adjust_for_ambient_noise", True)
-        )
         self.save_failed_audio = bool(attrs.get("save_failed_audio", False))
         self.use_new_listener = bool(attrs.get("use_new_listener", False))
         self.stt_timeout = int(attrs.get("stt_timeout", 7))
+        self.vad_config = attrs.get("vad_config", {"type": "energy"})
+        self.listen_sample_rate = int(attrs.get("listen_sample_rate", 48000))
 
         # Stop any existing VAD
         if rec_state.listen_closer is not None:
@@ -984,13 +992,15 @@ class SpeechIOService(SpeechService, EasyResource):
             mics = sr.Microphone.list_microphone_names()
 
             if self.mic_device_name != "":
-                rec_state.mic = sr.Microphone(mics.index(self.mic_device_name))
+                rec_state.mic = sr.Microphone(
+                    device_index=mics.index(self.mic_device_name),
+                    sample_rate=self.listen_sample_rate,
+                )
             else:
-                rec_state.mic = sr.Microphone()
+                rec_state.mic = sr.Microphone(sample_rate=self.listen_sample_rate)
 
-            if self.adjust_for_ambient_noise:
-                with rec_state.mic as source:
-                    rec_state.rec.adjust_for_ambient_noise(source, 2)
+            with rec_state.mic as source:
+                rec_state.rec.adjust_for_ambient_noise(source, 2)
 
             # set up background listening if desired
             if self.should_listen:
@@ -1000,11 +1010,24 @@ class SpeechIOService(SpeechService, EasyResource):
                 if self.use_vosk_vad and self.start_vosk_vad():
                     self.logger.debug("Using Vosk VAD for voice activity detection")
                 elif self.use_new_listener:
+                    vad_type = self.vad_config.get("type")
+                    vad_kwargs = self.vad_config.copy()
+                    vad_kwargs.pop("type", None)
+                    vad = None
+
+                    if vad_type == "energy":
+                        vad = EnergyVAD(**vad_kwargs)
+                    elif vad_type == "webrtc":
+                        vad = WebRTCVAD(**vad_kwargs)
+                    elif vad_type == "silero":
+                        vad = SileroVAD(**vad_kwargs)
+
+                    self.logger.debug(
+                        f"Using new listener with vad: {self.vad_config.get('type')}"
+                    )
                     self.listener = Listener(
                         source=SpeechRecognitionSource(rec_state.mic),
-                        vad=EnergyVAD(
-                            threshold=rec_state.rec.energy_threshold, dynamic=True
-                        ),
+                        vad=vad,
                         on_error=lambda err: self.logger.error(
                             f"new listener error: {err}"
                         ),
