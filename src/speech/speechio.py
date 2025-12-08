@@ -718,7 +718,7 @@ class SpeechIOService(SpeechService, EasyResource):
             self.logger.debug("transcript: " + str(response))
 
             if results := self._get_transcripts(response):
-                heard = "".join(result["transcript"] for result in results)
+                heard = results[0]["transcript"]
                 self.logger.debug("heard: " + heard)
         except sr.UnknownValueError:
             self.logger.debug("Google Speech Recognition could not understand audio")
@@ -782,10 +782,13 @@ class SpeechIOService(SpeechService, EasyResource):
             self.logger.debug(f"RecognizeResponse results: {response.results}")
             return [
                 {
-                    "transcript": result.alternatives[0].transcript,
-                    "confidence": result.alternatives[0].confidence,
+                    "transcript": "".join(
+                        result.alternatives[0].transcript for result in response.results
+                    ),
+                    "confidence": response.results[0].alternatives[0].confidence
+                    if len(response.results) > 0
+                    else 0.0,
                 }
-                for result in response.results
             ]
 
         return None
