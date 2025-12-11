@@ -56,6 +56,7 @@ On the new component panel, copy and paste the following attribute template into
   "listen_trigger_say": "<TRIGGER-PHRASE>",
   "listen_trigger_completion": "<COMPLETION-PHRASE>",
   "listen_trigger_command": "<COMMAND-TO-RETRIEVE-STORED-TEXT>",
+  "listen_trigger_all": true,
   "listen_command_buffer_length": 10,
   "listen_phrase_time_limit": 5,
   "mic_device_name": "myMic",
@@ -89,6 +90,7 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | `listen_trigger_say`  | string | Optional | If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_say* will be converted to speech and repeated back by the robot. Default: `"robot say"`. |
 | `listen_trigger_completion`  | string | Optional | If *listen* is true, any audio converted to text that is prefixed with *listen_trigger_completion* will be sent to the completion provider (if configured), converted to speech, and repeated back by the robot. Default: `"hey robot"`. |
 | `listen_trigger_command`  | string | Optional |  If `"listen": true`, any audio converted to text that is prefixed with *listen_trigger_command* will be stored in a LIFO buffer (list of strings) of size [listen_command_buffer_length](#listen_command_buffer_length) that can be retrieved via [get_commands()](https://github.com/viam-labs/speech-service-api/blob/main/README.md#get_commandsinteger) from the Speech Service API, enabling programmatic voice control of the robot. Default: `"robot can you"`. |
+| `listen_trigger_all` | bool | Optional | Similar to `listen_trigger_command` but in this case no activation word is needed. Use this when you want to place all recognized speech into a LIFO buffer to retrieve later. Set to `true` to use. Default: `false`
 | `listen_command_buffer_length`  | integer | Optional | The buffer length for the command. Default: `10`. |
 | `mic_device_name`  | string | Optional | If not set, will attempt to use the first available microphone device.<br><br>If set, will attempt to use a specifically labeled device name.<br><br>Available microphone device names will logged on module startup. Default: `""`. |
 | `cache_ahead_completions`  | boolean | Optional | If true, will read a second completion for the request and cache it for next time a matching request is made. This is useful for faster completions when completion text is less variable. Default: `false`. |
