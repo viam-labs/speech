@@ -1108,7 +1108,7 @@ class SpeechIOService(SpeechService, EasyResource):
                     self.logger.debug(
                         "speech_recognition listener started",
                         extra={
-                            "thread": threading.current_thread().name,
+                            "callback_thread": threading.current_thread().name,
                             "mic": self.mic_device_name,
                         },
                     )
