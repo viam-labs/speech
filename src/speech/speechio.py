@@ -218,11 +218,7 @@ class SpeechIOService(SpeechService, EasyResource):
                 if rec_state.listen_closer is not None:
                     rec_state.listen_closer(True)
             if rec_state.rec is not None and rec_state.mic is not None:
-                rec_state.listen_closer = rec_state.rec.listen_in_background(
-                    source=rec_state.mic,
-                    phrase_time_limit=self.listen_phrase_time_limit,
-                    callback=self.listen_callback,
-                )
+                rec_state.listen_closer(True)
         else:
             raise ValueError("Invalid trigger type provided")
 
@@ -310,6 +306,13 @@ class SpeechIOService(SpeechService, EasyResource):
         return completion
 
     async def get_commands(self, number: int) -> list:
+        if self.last_audio_ts:
+            delta = time.time() - self.last_audio_ts
+            if delta > 60:
+                self.logger.warning(
+                    f"No listen_callback for {delta:.1f}s while listener active"
+                )
+
         self.logger.debug("will get " + str(number) + " commands from command list")
         to_return = self.command_list[0:number]
         self.logger.debug("to return from command_list: " + str(to_return))
@@ -614,94 +617,114 @@ class SpeechIOService(SpeechService, EasyResource):
 
     def listen_callback(self, recognizer, audio):
         """Process audio with optional fuzzy trigger matching."""
-        if not self.main_loop or not self.main_loop.is_running():
-            self.logger.error("Main event loop is not available for STT task.")
-            return
-
-        self.logger.debug("Listen callback got audio")
-
-        # Get transcript with alternatives if fuzzy matching is enabled
-        if self.listen_trigger_fuzzy_matching and self.fuzzy_matcher:
-            future = asyncio.run_coroutine_threadsafe(
-                self._convert_audio_to_text_with_alternatives(audio), self.main_loop
-            )
-            try:
-                heard, alternatives = future.result(timeout=15)
-            except Exception as e:
-                self.logger.error(f"STT task failed: {e}")
+        try:
+            if not self.main_loop or not self.main_loop.is_running():
+                self.logger.error(
+                    "Listen callback invoked but main loop not running",
+                    extra={"thread": threading.current_thread().name},
+                )
                 return
 
-            # Try fuzzy matching
+            # --- LIVENESS SIGNAL (MOST IMPORTANT LINE) ---
+            self.last_audio_ts = time.time()
+
+            self.logger.debug(
+                "Listen callback got audio",
+                extra={"thread": threading.current_thread().name},
+            )
+
+            # Get transcript with alternatives if fuzzy matching is enabled
+            if self.listen_trigger_fuzzy_matching and self.fuzzy_matcher:
+                future = asyncio.run_coroutine_threadsafe(
+                    self._convert_audio_to_text_with_alternatives(audio),
+                    self.main_loop,
+                )
+                try:
+                    heard, alternatives = future.result(timeout=15)
+                except Exception as e:
+                    self.logger.error(f"STT task failed: {e}")
+                    return
+
+                if heard:
+                    self.logger.debug(f"speechio heard: {heard}")
+                    match = self._check_fuzzy_triggers(heard, alternatives)
+                    if match:
+                        self._handle_trigger_match(match)
+                    return
+            else:
+                future = asyncio.run_coroutine_threadsafe(
+                    self.convert_audio_to_text(audio),
+                    self.main_loop,
+                )
+                try:
+                    heard = future.result(timeout=15)
+                except Exception as e:
+                    self.logger.error(f"STT task failed: {e}")
+                    return
+
+            # Existing regex-based trigger detection
             if heard:
                 self.logger.debug(f"speechio heard: {heard}")
-                match = self._check_fuzzy_triggers(heard, alternatives)
-                if match:
-                    self._handle_trigger_match(match)
-                return
-        else:
-            # Use existing regex-based matching
-            future = asyncio.run_coroutine_threadsafe(
-                self.convert_audio_to_text(audio), self.main_loop
-            )
-            try:
-                heard = future.result(timeout=15)
-            except Exception as e:
-                self.logger.error(f"STT task failed: {e}")
-                return
 
-        # Existing regex-based trigger detection (fallback or when fuzzy disabled)
-        if heard != "":
-            self.logger.debug(f"speechio heard: {heard}")
+                if (
+                    self.should_listen
+                    and re.search(".*" + self.listen_trigger_say, heard, re.IGNORECASE)
+                ) or (self.trigger_active and self.active_trigger_type == "say"):
+                    self.trigger_active = False
+                    to_say = re.sub(
+                        ".*" + self.listen_trigger_say + r"\s+",
+                        "",
+                        heard,
+                        flags=re.IGNORECASE,
+                    )
+                    asyncio.run_coroutine_threadsafe(
+                        self.say(to_say, blocking=False), self.main_loop
+                    )
 
-            if (
-                self.should_listen
-                and re.search(".*" + self.listen_trigger_say, heard, re.IGNORECASE)
-            ) or (self.trigger_active and self.active_trigger_type == "say"):
-                self.trigger_active = False
-                to_say = re.sub(
-                    ".*" + self.listen_trigger_say + r"\s+",
-                    "",
-                    heard,
-                    flags=re.IGNORECASE,
-                )
-                asyncio.run_coroutine_threadsafe(
-                    self.say(to_say, blocking=False), self.main_loop
-                )
-            elif (
-                self.should_listen
-                and re.search(
-                    ".*" + self.listen_trigger_completion, heard, re.IGNORECASE
-                )
-            ) or (self.trigger_active and self.active_trigger_type == "completion"):
-                self.trigger_active = False
-                to_say = re.sub(
-                    ".*" + self.listen_trigger_completion + r"\s+",
-                    "",
-                    heard,
-                    flags=re.IGNORECASE,
-                )
-                asyncio.run_coroutine_threadsafe(
-                    self.completion(to_say, blocking=False), self.main_loop
-                )
-            elif (
-                self.should_listen
-                and re.search(".*" + self.listen_trigger_command, heard, re.IGNORECASE)
-            ) or (self.trigger_active and self.active_trigger_type == "command"):
-                self.trigger_active = False
-                command = re.sub(
-                    ".*" + self.listen_trigger_command + r"\s+",
-                    "",
-                    heard,
-                    flags=re.IGNORECASE,
-                )
-                self.command_list.insert(0, command)
-                self.logger.debug("added to command_list: '" + command + "'")
-                del self.command_list[self.listen_command_buffer_length :]
-            if not self.should_listen:
-                # stop listening if not in background listening mode
-                self.logger.debug("will close background listener")
-                if rec_state.listen_closer is not None:
+                elif (
+                    self.should_listen
+                    and re.search(
+                        ".*" + self.listen_trigger_completion, heard, re.IGNORECASE
+                    )
+                ) or (self.trigger_active and self.active_trigger_type == "completion"):
+                    self.trigger_active = False
+                    to_say = re.sub(
+                        ".*" + self.listen_trigger_completion + r"\s+",
+                        "",
+                        heard,
+                        flags=re.IGNORECASE,
+                    )
+                    asyncio.run_coroutine_threadsafe(
+                        self.completion(to_say, blocking=False), self.main_loop
+                    )
+
+                elif (
+                    self.should_listen
+                    and re.search(".*" + self.listen_trigger_command, heard, re.IGNORECASE)
+                ) or (self.trigger_active and self.active_trigger_type == "command"):
+                    self.trigger_active = False
+                    command = re.sub(
+                        ".*" + self.listen_trigger_command + r"\s+",
+                        "",
+                        heard,
+                        flags=re.IGNORECASE,
+                    )
+                    self.command_list.insert(0, command)
+                    self.logger.debug(f"added to command_list: '{command}'")
+                    del self.command_list[self.listen_command_buffer_length :]
+
+                if not self.should_listen and rec_state.listen_closer is not None:
+                    self.logger.debug("Closing background listener (not in listen mode)")
                     rec_state.listen_closer()
+
+        except Exception:
+            # CRITICAL: proves or disproves silent thread death
+            self.logger.exception(
+                "Unhandled exception in listen_callback",
+                extra={"thread": threading.current_thread().name},
+            )
+            raise
+
 
     async def convert_audio_to_text(self, audio: sr.AudioData) -> str:
         if self.stt is not None:
@@ -927,6 +950,9 @@ class SpeechIOService(SpeechService, EasyResource):
         self.active_trigger_type = ""
         self.stt = None
 
+        # Track last time background listener delivered audio
+        self.last_audio_ts = None
+
         # Fuzzy matching configuration
         self.listen_trigger_fuzzy_matching = bool(
             attrs.get("listen_trigger_fuzzy_matching", False)
@@ -1016,7 +1042,10 @@ class SpeechIOService(SpeechService, EasyResource):
 
             # set up background listening if desired
             if self.should_listen:
-                self.logger.debug("Will listen in background")
+                self.logger.debug(
+                    "Starting background listener "
+                    f"(vad=speech_recognition, phrase_time_limit={self.listen_phrase_time_limit})"
+                )
 
                 # Try Vosk VAD first if enabled
                 if self.use_vosk_vad and self.start_vosk_vad():
@@ -1060,11 +1089,41 @@ class SpeechIOService(SpeechService, EasyResource):
                     self.listener.start()
                 else:
                     # Fall back to speech_recognition VAD
-                    self.logger.debug("Using speech_recognition VAD")
-                    rec_state.listen_closer = rec_state.rec.listen_in_background(
+                    self.logger.debug(
+                        "Starting background listener (speech_recognition VAD) "
+                        f"phrase_time_limit={self.listen_phrase_time_limit}"
+                    )
+                    
+                    # Fall back to speech_recognition VAD
+                    self.logger.debug(
+                        "Starting background listener (speech_recognition VAD) "
+                        f"phrase_time_limit={self.listen_phrase_time_limit}"
+                    )
+
+                    raw_closer = rec_state.rec.listen_in_background(
                         source=rec_state.mic,
                         phrase_time_limit=self.listen_phrase_time_limit,
                         callback=self.listen_callback,
+                    )
+                    self.logger.debug(
+                        "speech_recognition listener started",
+                        extra={
+                            "thread": threading.current_thread().name,
+                            "mic": self.mic_device_name,
+                        },
+                    )
+
+                    def wrapped_closer(wait_for_stop=True):
+                        self.logger.warning(
+                            "listen_in_background closer invoked "
+                            f"(wait_for_stop={wait_for_stop})"
+                        )
+                        return raw_closer(wait_for_stop)
+
+                    rec_state.listen_closer = wrapped_closer
+
+                    self.logger.info(
+                        "speech_recognition background listener initialized (thread spawned internally)"
                     )
 
     async def do_command(
