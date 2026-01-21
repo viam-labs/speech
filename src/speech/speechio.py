@@ -621,7 +621,7 @@ class SpeechIOService(SpeechService, EasyResource):
             if not self.main_loop or not self.main_loop.is_running():
                 self.logger.error(
                     "Listen callback invoked but main loop not running",
-                    extra={"thread": threading.current_thread().name},
+                    extra={"callback_thread": threading.current_thread().name},
                 )
                 return
 
@@ -630,7 +630,7 @@ class SpeechIOService(SpeechService, EasyResource):
 
             self.logger.debug(
                 "Listen callback got audio",
-                extra={"thread": threading.current_thread().name},
+                extra={"callback_thread": threading.current_thread().name},
             )
 
             # Get transcript with alternatives if fuzzy matching is enabled
@@ -721,7 +721,7 @@ class SpeechIOService(SpeechService, EasyResource):
             # CRITICAL: proves or disproves silent thread death
             self.logger.exception(
                 "Unhandled exception in listen_callback",
-                extra={"thread": threading.current_thread().name},
+                extra={"callback_thread": threading.current_thread().name},
             )
             raise
 
