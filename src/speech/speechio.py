@@ -968,7 +968,7 @@ class SpeechIOService(SpeechService, EasyResource):
         self.use_new_listener = bool(attrs.get("use_new_listener", False))
         self.stt_timeout = int(attrs.get("stt_timeout", 7))
         self.vad_config = attrs.get("vad_config", {"type": "energy"})
-        self.listen_sample_rate = int(attrs.get("listen_sample_rate", 48000))
+        self.listen_sample_rate = int(attrs.get("listen_sample_rate", 16000))
 
         # Stop any existing VAD
         if rec_state.listen_closer is not None:
@@ -1148,7 +1148,7 @@ class SpeechIOService(SpeechService, EasyResource):
         rec_state.listen_closer = None
 
         # Terminate PortAudio to release ALSA
-        # This will wake the listener thread up and it will error on shutdown
+        # If the old listener thread unblocks after this it will error on shutdown
         # since it's stream was terminated
         try:
             self.logger.debug("Attempting to terminate PortAudio")
