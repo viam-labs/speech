@@ -312,6 +312,8 @@ class SpeechIOService(SpeechService, EasyResource):
                 self.logger.warning(
                     f"No listen_callback for {delta:.1f}s while listener active"
                 )
+                # WATCHDOG TRIP
+                self._restart_background_listener()
 
         self.logger.debug("will get " + str(number) + " commands from command list")
         to_return = self.command_list[0:number]
@@ -625,7 +627,7 @@ class SpeechIOService(SpeechService, EasyResource):
                 )
                 return
 
-            # --- LIVENESS SIGNAL (MOST IMPORTANT LINE) ---
+            # --- LIVENESS SIGNAL ---
             self.last_audio_ts = time.time()
 
             self.logger.debug(
@@ -1125,6 +1127,44 @@ class SpeechIOService(SpeechService, EasyResource):
                     self.logger.info(
                         "speech_recognition background listener initialized (thread spawned internally)"
                     )
+
+    def _restart_background_listener(self):
+        # GUARD: only restart speech_recognition background listener
+        if self.use_new_listener or self.use_vosk_vad:
+            self.logger.warning(
+                "Watchdog restart skipped: non-speech_recognition listener in use"
+            )
+            return
+    
+        self.logger.warning("Restarting background listener due to inactivity")
+
+        try:
+            if rec_state.listen_closer is not None:
+                rec_state.listen_closer(True)
+        except Exception:
+            self.logger.exception("Error while stopping listener during watchdog restart")
+
+        rec_state.listen_closer = None
+
+        # Re-run the relevant part of reconfigure() that starts listening
+        # (minimal duplication is OK for a short-term patch)
+        if self.should_listen and rec_state.rec and rec_state.mic:
+            self.logger.info("Re-initializing background listener")
+
+            raw_closer = rec_state.rec.listen_in_background(
+                source=rec_state.mic,
+                phrase_time_limit=self.listen_phrase_time_limit,
+                callback=self.listen_callback,
+            )
+
+            def wrapped_closer(wait_for_stop=True):
+                self.logger.warning(
+                    "listen_in_background closer invoked (watchdog)"
+                )
+                return raw_closer(wait_for_stop)
+
+            rec_state.listen_closer = wrapped_closer
+            self.last_audio_ts = time.time()
 
     async def do_command(
         self,
