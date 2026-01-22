@@ -313,7 +313,8 @@ class SpeechIOService(SpeechService, EasyResource):
                     f"No listen_callback for {delta:.1f}s while listener active"
                 )
                 # WATCHDOG TRIP
-                self._restart_background_listener()
+                if delta > 120:
+                    self._restart_background_listener()
 
         self.logger.debug("will get " + str(number) + " commands from command list")
         to_return = self.command_list[0:number]
