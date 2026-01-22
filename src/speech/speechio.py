@@ -18,6 +18,7 @@ import asyncio
 import hashlib
 import threading
 import pyaudio
+import pyaudio._portaudio as portaudio
 import json
 import time
 from typing_extensions import Self
@@ -1096,7 +1097,6 @@ class SpeechIOService(SpeechService, EasyResource):
                         "Starting background listener (speech_recognition VAD) "
                         f"phrase_time_limit={self.listen_phrase_time_limit}"
                     )
-                    
                     # Fall back to speech_recognition VAD
                     self.logger.debug(
                         "Starting background listener (speech_recognition VAD) "
@@ -1136,21 +1136,50 @@ class SpeechIOService(SpeechService, EasyResource):
                 "Watchdog restart skipped: non-speech_recognition listener in use"
             )
             return
-    
         self.logger.warning("Restarting background listener due to inactivity")
 
         try:
             if rec_state.listen_closer is not None:
-                rec_state.listen_closer(True)
+                # Use wait_for_stop=False to avoid blocking if the thread is stalled
+                rec_state.listen_closer(False)
         except Exception:
             self.logger.exception("Error while stopping listener during watchdog restart")
 
         rec_state.listen_closer = None
 
-        # Re-run the relevant part of reconfigure() that starts listening
-        # (minimal duplication is OK for a short-term patch)
-        if self.should_listen and rec_state.rec and rec_state.mic:
-            self.logger.info("Re-initializing background listener")
+        # Terminate PortAudio to release ALSA
+        # This will wake the listener thread up and it will error on shutdown
+        # since it's stream was terminated
+        try:
+            self.logger.debug("Attempting to terminate PortAudio")
+            portaudio.terminate()
+        except Exception:
+            self.logger.exception("Failed to terminate PortAudio")
+
+        # Re-initialize PortAudio
+        try:
+            portaudio.initialize()
+            self.logger.debug("PortAudio re-initialized")
+        except Exception:
+            self.logger.exception("Failed to re-initialize PortAudio")
+
+        # Create new mic since old one may be held by stalled thread
+        try:
+            self.logger.debug("Creating new microphone (old may be held by stalled thread)")
+            mics = sr.Microphone.list_microphone_names()
+            if self.mic_device_name != "":
+                rec_state.mic = sr.Microphone(
+                    device_index=mics.index(self.mic_device_name),
+                    sample_rate=self.listen_sample_rate,
+                )
+            else:
+                rec_state.mic = sr.Microphone(sample_rate=self.listen_sample_rate)
+        except Exception:
+            self.logger.exception("Failed to create new microphone during watchdog restart")
+            return
+
+        if self.should_listen and rec_state.rec:
+            self.logger.info("Starting listener with fresh microphone")
 
             raw_closer = rec_state.rec.listen_in_background(
                 source=rec_state.mic,
@@ -1166,6 +1195,7 @@ class SpeechIOService(SpeechService, EasyResource):
 
             rec_state.listen_closer = wrapped_closer
             self.last_audio_ts = time.time()
+            self.logger.info("Watchdog restart complete - new listener initialized")
 
     async def do_command(
         self,
