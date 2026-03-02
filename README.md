@@ -150,7 +150,7 @@ The following configuration sets up listening mode with local speech-to-text, us
   "speech_provider": "elevenlabs",
   "speech_provider_key": "keygoeshere",
   "speech_voice": "Antoni",
-"mic_device_name": "myMic"
+  "mic_device_name": "myMic"
 }
 ```
 
