@@ -16,19 +16,20 @@ import os
 import re
 import asyncio
 import hashlib
-import wave
+import threading
+import pyaudio
+import json
+import time
 from typing_extensions import Self
+import wave
 
 from viam.proto.app.robot import ComponentConfig
-from viam.proto.common import ResourceName, AudioInfo
+from viam.proto.common import ResourceName
 from viam.resource.base import ResourceBase
-from viam.components.audio_in import AudioIn
-from viam.components.audio_out import AudioOut
 from viam.resource.easy_resource import EasyResource
 from viam.resource.types import Model
 from viam.utils import struct_to_dict, ValueTypes
 
-import numpy as np
 import pygame
 from pygame import mixer
 from elevenlabs.client import ElevenLabs
@@ -51,8 +52,6 @@ except ImportError:
     VOSK_AVAILABLE = False
 
 from speech_service_api import SpeechService
-from .vosk_handler import VoskHandler
-from .viam_audio_source import ViamAudioInSource
 
 AUDIO_DIR = os.environ.get(
     "VIAM_MODULE_DATA", os.path.join(os.path.expanduser("~"), ".data", "audio")
@@ -72,11 +71,16 @@ class Closer(Protocol):
     def __call__(self, wait_for_stop: bool = True) -> None: ...
 
 
-# Legacy microphone and speech reognition struct,
-# Kept for backwards compatibility
 class RecState:
+    listen_closer: Optional[Closer] = None
     mic: Optional[sr.Microphone] = None
     rec: Optional[sr.Recognizer] = None
+    # Vosk VAD components
+    vosk_model: Optional[object] = None
+    vosk_rec: Optional[object] = None
+    vosk_stream: Optional[object] = None
+    vosk_thread: Optional[threading.Thread] = None
+    vosk_stop_event: Optional[threading.Event] = None
     # Audio playback interrupt flag
     playback_stop_requested: bool = False
 
@@ -121,15 +125,6 @@ class SpeechIOService(SpeechService, EasyResource):
     listen_trigger_fuzzy_matching: bool
     listen_trigger_fuzzy_threshold: int
     fuzzy_matcher: Optional[object] = None
-    microphone: str
-    microphone_client: Optional[AudioIn] = None
-    speaker: str
-    speaker_client: Optional[AudioOut] = None
-    vosk_handler: Optional[VoskHandler] = None
-    stt_in_progress: bool = False
-    listen_closer: Optional[Closer] = None
-    is_playing_audio: bool
-    listener: Optional[Listener] = None
 
     @classmethod
     def new(
@@ -155,23 +150,15 @@ class SpeechIOService(SpeechService, EasyResource):
         stt_provider = str(attrs.get("stt_provider", ""))
         if stt_provider != "" and "google" not in stt_provider:
             deps.append(stt_provider)
-        microphone = str(attrs.get("microphone_name", ""))
-        if microphone != "":
-            deps.append(microphone)
-        speaker = str(attrs.get("speaker_name", ""))
-        if speaker != "":
-            deps.append(speaker)
         return deps, []
 
     async def say(self, text: str, blocking: bool, cache_only: bool = False) -> str:
         if str == "":
             raise ValueError("No text provided")
 
-        self.logger.info(f"say() called with text='{text[:50]}...', provider={self.speech_provider}")
         self.logger.debug("Generating audio...")
         if not os.path.isdir(CACHEDIR):
             os.mkdir(CACHEDIR)
-            self.logger.debug(f"Created cache directory: {CACHEDIR}")
 
         file = os.path.join(
             CACHEDIR,
@@ -182,101 +169,23 @@ class SpeechIOService(SpeechService, EasyResource):
             + ".mp3",
         )
         try:
-            if not os.path.isfile(file):   # read from cache if it exists
-                self.logger.info(f"Cache miss, generating TTS for: {file}")
+            if not os.path.isfile(file):  # read from cache if it exists
                 if self.speech_provider == "elevenlabs":
-                    self.logger.debug("Calling ElevenLabs API...")
                     audio = self.eleven_client["client"].text_to_speech.convert(
                         text=text, **self.speech_generation_config
                     )
-                    self.logger.debug("ElevenLabs API responded, saving...")
                     eleven_save(audio=audio, filename=file)
-                    self.logger.debug("Saved to file")
-                    # Create audio_bytes for speaker_client path
-                    audio_bytes = BytesIO()
-                    if isinstance(audio, Iterator):
-                        for chunk in audio:
-                            audio_bytes.write(chunk)
-                    else:
-                        audio_bytes.write(audio)
                 else:
-                    self.logger.debug("Calling gTTS API...")
-                    # Run blocking gTTS operations in executor
-                    loop = asyncio.get_event_loop()
+                    sp = gTTS(text=text, **self.speech_generation_config)
+                    sp.save(file)
 
-                    def generate_tts():
-                        sp = gTTS(text=text, **self.speech_generation_config)
-                        self.logger.debug("gTTS initialized, saving to file...")
-                        sp.save(file)
-                        self.logger.debug("gTTS saved to file")
-                        audio_fp = BytesIO()
-                        sp.write_to_fp(audio_fp)
-                        return audio_fp.getvalue()
-
-                    try:
-                        self.logger.debug("Running gTTS in executor with timeout...")
-                        audio_bytes_data = await asyncio.wait_for(
-                            loop.run_in_executor(None, generate_tts),
-                            timeout=15.0  # 15 second timeout
-                        )
-                        audio_bytes = BytesIO(audio_bytes_data)
-                        self.logger.debug("gTTS audio ready")
-                    except asyncio.TimeoutError:
-                        self.logger.error("gTTS timed out after 15 seconds!")
-                        raise
-                    except Exception as e:
-                        self.logger.error(f"gTTS error: {e}")
-                        raise
-            else:
-                self.logger.info(f"Cache hit: {file}")
-
-            if self.speaker_client is not None:
-                if not cache_only:
-                    with open(file, "rb") as f:
-                        audio_bytes = BytesIO(f.read())
-
-                    audio_data = audio_bytes.getvalue()
-
-                    try:
-                        audio_info = AudioInfo(
-                            codec="mp3"
-                        )
-
-                        self.logger.debug("playing audio...")
-                        self.is_playing_audio = True
-
-                        if blocking:
-                            # Wait for playback to complete
-                            try:
-                                await self.speaker_client.play(audio_data, audio_info)
-                            except Exception as e:
-                                self.logger.error(f"Error playing audio: {e}")
-                            finally:
-                                self.logger.debug("playback complete")
-                                self.is_playing_audio = False
-                        else:
-                            # Start playback and return immediately
-                            async def play_and_cleanup():
-                                try:
-                                    await self.speaker_client.play(audio_data, audio_info)
-                                except Exception as e:
-                                    self.logger.error(f"Error playing audio: {e}")
-                                finally:
-                                    self.is_playing_audio = False
-
-                            asyncio.create_task(play_and_cleanup())
-
-                    except Exception as e:
-                        self.logger.error(f"speaker client play error: {e}")
-            else:
-                # Fallback to legacy pygame mixer if no audioout client
-                if not cache_only:
-                    mixer.music.load(file)
-                    rec_state.playback_stop_requested = (
-                        False  # Reset stop flag for new playback
-                    )
-                    self.logger.debug("Playing audio...")
-                    mixer.music.play()  # Play it
+            if not cache_only:
+                mixer.music.load(file)
+                rec_state.playback_stop_requested = (
+                    False  # Reset stop flag for new playback
+                )
+                self.logger.debug("Playing audio...")
+                mixer.music.play()  # Play it
 
                 if blocking:
                     while (
@@ -284,17 +193,17 @@ class SpeechIOService(SpeechService, EasyResource):
                     ):
                         pygame.time.Clock().tick(10)
 
-                # Reset stop flag after breaking out of loop
-                if rec_state.playback_stop_requested:
-                    rec_state.playback_stop_requested = False
-                    self.logger.debug(
-                        "say() blocking loop interrupted by stop request"
-                    )
+                    # Reset stop flag after breaking out of loop
+                    if rec_state.playback_stop_requested:
+                        rec_state.playback_stop_requested = False
+                        self.logger.debug(
+                            "say() blocking loop interrupted by stop request"
+                        )
 
+                self.logger.debug("Played audio...")
         except RuntimeError as err:
-                self.logger.error(err)
-                raise ValueError("say() speech failure")
-
+            self.logger.error(err)
+            raise ValueError("say() speech failure")
 
         return text
 
@@ -306,21 +215,13 @@ class SpeechIOService(SpeechService, EasyResource):
             self.trigger_active = True
             if self.should_listen:
                 # close and re-open listener so any in-progress speech is not captured
-                if self.listen_closer is not None:
-                    self.listen_closer(True)
-
-            # Use microphone_client if available, otherwise use legacy SR microphone
-            if self.microphone_client is not None:
-                viam_source = ViamAudioInSource(
-                    microphone_client=self.microphone_client,
-                    logger=self.logger
-            )
-                self.listen_closer = self._setup_hearken_listener(viam_source, "microphone_client")
-            elif rec_state.rec is not None and rec_state.mic is not None:
-                self.listen_closer = rec_state.rec.listen_in_background(
+                if rec_state.listen_closer is not None:
+                    rec_state.listen_closer(True)
+            if rec_state.rec is not None and rec_state.mic is not None:
+                rec_state.listen_closer = rec_state.rec.listen_in_background(
                     source=rec_state.mic,
                     phrase_time_limit=self.listen_phrase_time_limit,
-                    callback=lambda recognizer, audio: self.listen_callback(audio),
+                    callback=self.listen_callback,
                 )
         else:
             raise ValueError("Invalid trigger type provided")
@@ -328,11 +229,7 @@ class SpeechIOService(SpeechService, EasyResource):
         return "OK"
 
     async def is_speaking(self) -> bool:
-        if self.speaker_client is not None:
-            return self.is_playing_audio
-        else:
-            return mixer.music.get_busy()
-
+        return mixer.music.get_busy()
 
     async def stop_playback(self) -> bool:
         """Stop any currently playing audio.
@@ -354,8 +251,6 @@ class SpeechIOService(SpeechService, EasyResource):
                 speech_service.main_loop
             )
         """
-        #TODO: add stop do command to speaker module
-        # and call it here
         if mixer.music.get_busy():
             rec_state.playback_stop_requested = True
             mixer.music.stop()
@@ -414,52 +309,15 @@ class SpeechIOService(SpeechService, EasyResource):
             await self.say(completion, blocking)
         return completion
 
-    async def get_commands(self, number) -> list:
+    async def get_commands(self, number: int) -> list:
         self.logger.debug("will get " + str(number) + " commands from command list")
         to_return = self.command_list[0:number]
+        self.logger.debug("to return from command_list: " + str(to_return))
         del self.command_list[0:number]
         return to_return
 
     async def listen(self) -> str:
-        if self.microphone_client is not None:
-            self.logger.debug("listening for speech...")
-            # Create listener on-demand if not already set up
-            temp_listener = False
-            listener_closer = None
-            if not self.listener:
-                temp_listener = True
-                self.logger.debug("creating hearken listener for one-off listen()")
-                viam_source = ViamAudioInSource(
-                    microphone_client=self.microphone_client,
-                    sample_rate=self.listen_sample_rate,
-                    logger=self.logger
-                )
-                listener_closer = self._setup_hearken_listener(viam_source, "microphone_client")
-
-                # Give the audio stream a moment to start
-                await asyncio.sleep(0.5)  # 500ms for stream to start
-
-            # Run wait_for_speech in executor to avoid blocking event loop
-            self.logger.debug("Waiting for speech detection")
-            loop = asyncio.get_event_loop()
-            segment = await loop.run_in_executor(
-                None,
-                lambda: self.listener.wait_for_speech()
-            )
-
-            # Clean up temporary listener
-            if temp_listener and listener_closer:
-                self.logger.debug("Stopping temporary listener and closing audio source")
-                listener_closer()  # Stops listener and closes audio stream
-
-            if segment:
-                audio = sr.AudioData(
-                    segment.audio_data, segment.sample_rate, segment.sample_width
-                )
-                return await self.convert_audio_to_text(audio)
-
-        #Use legacy SR microphone
-        elif rec_state.rec is not None and rec_state.mic is not None:
+        if rec_state.rec is not None and rec_state.mic is not None:
             if self.use_new_listener:
                 if segment := self.listener.wait_for_speech():
                     audio = sr.AudioData(
@@ -472,7 +330,6 @@ class SpeechIOService(SpeechService, EasyResource):
                     audio = rec_state.rec.listen(source)
 
             return await self.convert_audio_to_text(audio)
-
 
         self.logger.debug("Nothing to listen to")
         return ""
@@ -510,7 +367,9 @@ class SpeechIOService(SpeechService, EasyResource):
 
                     # Use AudioData.from_file() to create AudioData directly from file
                     audio = sr.AudioData.from_file(temp_file_path)
-                    self.logger.info(f"Created AudioData from file: {len(audio.frame_data)} bytes, {audio.sample_rate}Hz")
+                    self.logger.debug(
+                        f"Created AudioData from file: {len(audio.frame_data)} bytes, {audio.sample_rate}Hz"
+                    )
 
                     return await self.convert_audio_to_text(audio)
 
@@ -543,6 +402,7 @@ class SpeechIOService(SpeechService, EasyResource):
 
     def vosk_vad_callback(self, text: str):
         """Callback for Vosk VAD when speech is detected.
+
         Note: Vosk doesn't provide alternatives, so fuzzy matching works
         but multi-alternative search is not available.
         """
@@ -606,33 +466,153 @@ class SpeechIOService(SpeechService, EasyResource):
                 self.logger.debug("added to command_list: '" + command + "'")
                 del self.command_list[self.listen_command_buffer_length :]
 
+    def vosk_vad_thread(self):
+        """Vosk VAD thread for voice activity detection"""
+        try:
+            p = pyaudio.PyAudio()
+            stream = p.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=16000,
+                input=True,
+                frames_per_buffer=8000,
+            )
+
+            rec_state.vosk_stream = stream
+
+            # Track phrase timing for Vosk VAD
+            phrase_start_time = None
+            phrase_time_limit = self.listen_phrase_time_limit
+
+            while not rec_state.vosk_stop_event.is_set():
+                try:
+                    data = stream.read(4000, exception_on_overflow=False)
+
+                    # Check if we have speech activity
+                    if rec_state.vosk_rec.AcceptWaveform(data):
+                        result = json.loads(rec_state.vosk_rec.Result())
+                        if result.get("text", "").strip():
+                            # Speech detected
+                            if phrase_start_time is None:
+                                phrase_start_time = time.time()
+                                self.logger.debug("Vosk VAD: Phrase started")
+
+                            # Check phrase time limit
+                            if phrase_time_limit and phrase_start_time:
+                                elapsed_time = time.time() - phrase_start_time
+                                if elapsed_time >= phrase_time_limit:
+                                    self.logger.debug(
+                                        f"Vosk VAD: Phrase time limit reached ({elapsed_time:.1f}s)"
+                                    )
+                                    # Reset for next phrase
+                                    phrase_start_time = None
+                                    continue
+
+                            self.vosk_vad_callback(result["text"])
+                        else:
+                            # No speech detected, reset phrase timing
+                            if phrase_start_time is not None:
+                                self.logger.debug("Vosk VAD: Phrase ended (no speech)")
+                                phrase_start_time = None
+
+                except Exception as e:
+                    self.logger.error(f"Vosk VAD error: {e}")
+                    break
+
+        except Exception as e:
+            self.logger.error(f"Vosk VAD thread error: {e}")
+        finally:
+            if rec_state.vosk_stream:
+                rec_state.vosk_stream.close()
+            if p:
+                p.terminate()
+
     def start_vosk_vad(self):
-        """Start Vosk VAD using VoskHandler"""
+        """Start Vosk VAD if available"""
         if not VOSK_AVAILABLE:
-            self.logger.warning("Vosk not available")
+            self.logger.warning(
+                "Vosk not available, falling back to speech_recognition VAD"
+            )
             return False
 
         try:
-            self.vosk_handler = VoskHandler(
-                logger=self.logger,
-                callback=self.vosk_vad_callback,
-                main_loop=self.main_loop,
-                phrase_time_limit=self.listen_phrase_time_limit,
-                microphone_client=self.microphone_client
+            # Try to load a small Vosk model for VAD
+            # You can download models from https://alphacephei.com/vosk/models
+            model_path = os.path.expanduser("~/vosk-model-small-en-us-0.15")
+            if not os.path.exists(model_path):
+                self.logger.debug("Vosk model not found, attempting to download...")
+                if self.download_vosk_model():
+                    self.logger.debug("Successfully downloaded Vosk model")
+                else:
+                    self.logger.warning(
+                        "Failed to download Vosk model, falling back to speech_recognition VAD"
+                    )
+                    return False
+
+            rec_state.vosk_model = vosk.Model(model_path)
+            rec_state.vosk_rec = vosk.KaldiRecognizer(rec_state.vosk_model, 16000)
+            rec_state.vosk_stop_event = threading.Event()
+
+            rec_state.vosk_thread = threading.Thread(
+                target=self.vosk_vad_thread, daemon=True
             )
-            return self.vosk_handler.start()
+            rec_state.vosk_thread.start()
+
+            self.logger.debug("Started Vosk VAD for voice activity detection")
+            return True
 
         except Exception as e:
             self.logger.error(f"Failed to start Vosk VAD: {e}")
             return False
 
-    def stop_vosk_vad(self):
-        """Stop Vosk VAD if running"""
-        if self.vosk_handler is not None:
-            self.vosk_handler.stop()
-            self.vosk_handler = None
+    def download_vosk_model(self):
+        """Download Vosk model automatically"""
+        try:
+            import urllib.request
+            import zipfile
 
-    def listen_callback(self, audio):
+            model_name = "vosk-model-small-en-us-0.15"
+            model_url = (
+                "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+            )
+            model_path = os.path.expanduser(f"~/{model_name}")
+            zip_path = os.path.expanduser(f"~/{model_name}.zip")
+
+            self.logger.debug(f"Downloading Vosk model from {model_url}")
+
+            # Download the model
+            urllib.request.urlretrieve(model_url, zip_path)
+
+            # Extract the model
+            self.logger.debug("Extracting Vosk model...")
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(os.path.expanduser("~/"))
+
+            # Clean up zip file
+            os.remove(zip_path)
+
+            # Verify the model was extracted correctly
+            if os.path.exists(model_path):
+                self.logger.debug(f"Vosk model downloaded successfully to {model_path}")
+                return True
+            else:
+                self.logger.error("Failed to extract Vosk model")
+                return False
+
+        except Exception as e:
+            self.logger.error(f"Failed to download Vosk model: {e}")
+            return False
+
+    def stop_vosk_vad(self):
+        """Stop Vosk VAD"""
+        if rec_state.vosk_stop_event:
+            rec_state.vosk_stop_event.set()
+        if rec_state.vosk_thread and rec_state.vosk_thread.is_alive():
+            rec_state.vosk_thread.join(timeout=1)
+        if rec_state.vosk_stream:
+            rec_state.vosk_stream.close()
+
+    def listen_callback(self, recognizer, audio):
         """Process audio with optional fuzzy trigger matching."""
         if not self.main_loop or not self.main_loop.is_running():
             self.logger.error("Main event loop is not available for STT task.")
@@ -720,9 +700,8 @@ class SpeechIOService(SpeechService, EasyResource):
             if not self.should_listen:
                 # stop listening if not in background listening mode
                 self.logger.debug("will close background listener")
-                if self.listen_closer is not None:
-                    self.listen_closer()
-
+                if rec_state.listen_closer is not None:
+                    rec_state.listen_closer()
 
     async def convert_audio_to_text(self, audio: sr.AudioData) -> str:
         if self.stt is not None:
@@ -749,8 +728,6 @@ class SpeechIOService(SpeechService, EasyResource):
                     e
                 )
             )
-        finally:
-            self.stt_in_progress = False
         return heard
 
     async def _convert_audio_to_text_with_alternatives(
@@ -888,140 +865,17 @@ class SpeechIOService(SpeechService, EasyResource):
             del self.command_list[self.listen_command_buffer_length :]
 
         if not self.should_listen:
-            if self.listen_closer is not None:
-                self.listen_closer()
-
-    def _setup_hearken_listener(self, source, source_name: str):
-        """Set up hearken Listener with configurable VAD.
-
-        Args:
-            source: Audio source (ViamAudioInSource or SpeechRecognitionSource)
-            source_name: Name for logging (e.g., "microphone_client" or "speech_recognition")
-
-        Returns:
-            Closer function to stop the listener
-        """
-        vad_type = self.vad_config.get("type", "webrtc")
-        vad_kwargs = self.vad_config.copy()
-        vad_kwargs.pop("type", None)
-        vad = None
-
-        if vad_type == "energy":
-            vad = EnergyVAD(**vad_kwargs)
-        elif vad_type == "webrtc":
-            vad = WebRTCVAD(**vad_kwargs)
-        elif vad_type == "silero":
-            vad = SileroVAD(**vad_kwargs)
-
-        self.logger.debug(f"Using hearken listener with {vad_type} VAD and {source_name}")
-
-        self.listener = Listener(
-            source=source,
-            vad=vad,
-            on_error=lambda err: self.logger.error(f"hearken listener error: {err}"),
-            on_speech=lambda segment: self.listen_callback(
-                sr.AudioData(
-                    segment.audio_data,
-                    segment.sample_rate,
-                    segment.sample_width,
-                )
-            ),
-            event_loop=self.main_loop,  # Pass event loop for async sources
-        )
-
-        def listener_closer(wait_for_stop=True):
-            self.listener.stop()
-            if hasattr(source, 'close'):
-                source.close()
-
-        try:
-            self.logger.debug("Starting hearken listener...")
-            self.listener.start()
-            self.logger.debug("Hearken listener started successfully")
-        except Exception as e:
-            self.logger.error(f"Failed to start hearken listener: {e}")
-            raise
-        return listener_closer
-
-    def _setup_background_listening(self):
-        """Set up background listening with appropriate VAD based on configuration.
-
-        Sets self.listen_closer to the appropriate closer function.
-        """
-        # Stop any existing VAD before setting up new one
-        if self.listen_closer is not None:
-            self.listen_closer(True)
-        self.stop_vosk_vad()
-
-        # Try Vosk VAD first if enabled (works with both modern and legacy microphones)
-        if self.use_vosk_vad and self.start_vosk_vad():
-            self.logger.debug("Using Vosk VAD for voice activity detection")
-            return  # Vosk VAD handles everything (VAD + STT)
-
-        # Vosk not enabled/available, set up appropriate fallback VAD
-        if self.microphone_client is not None and not self.disable_mic:
-            # Use hearken listener with microphone_client
-            viam_source = ViamAudioInSource(
-                microphone_client=self.microphone_client,
-                logger=self.logger
-            )
-            self.listen_closer = self._setup_hearken_listener(viam_source, "microphone_client")
-
-        elif not self.disable_mic:
-            # Legacy path: Set up speech_recognition microphone first
-            rec_state.rec.dynamic_energy_threshold = True
-
-            try:
-                mics = sr.Microphone.list_microphone_names()
-
-                if self.mic_device_name != "":
-                    rec_state.mic = sr.Microphone(
-                        device_index=mics.index(self.mic_device_name),
-                        sample_rate=self.listen_sample_rate,
-                    )
-                else:
-                    rec_state.mic = sr.Microphone(sample_rate=self.listen_sample_rate)
-
-                if rec_state.mic is not None:
-                    with rec_state.mic as source:
-                        rec_state.rec.adjust_for_ambient_noise(source, 2)
-            except Exception as e:
-                self.logger.warning(f"Failed to initialize speech_recognition microphone: {e}")
-                rec_state.mic = None
-
-            # Use hearken Listener with configurable VAD or fallback to speech_recognition
-            if self.use_new_listener:
-                # Use hearken listener with speech_recognition microphone
-                sr_source = SpeechRecognitionSource(rec_state.mic)
-                self.listen_closer = self._setup_hearken_listener(sr_source, "speech_recognition")
-            else:
-                # Fall back to speech_recognition VAD
-                self.logger.debug("Using speech_recognition VAD")
-                self.listen_closer = rec_state.rec.listen_in_background(
-                    source=rec_state.mic,
-                    phrase_time_limit=self.listen_phrase_time_limit,
-                    callback=lambda recognizer, audio: self.listen_callback(audio),
-                )
+            if rec_state.listen_closer is not None:
+                rec_state.listen_closer()
 
     def reconfigure(
         self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]
     ):
-        self.logger.warning(
-            "DEPRECATED: The viam-labs:speech:speechio module is deprecated and will be removed. "
-            "See README for migration guide."
-        )
         try:
             self.main_loop = asyncio.get_running_loop()
         except RuntimeError:
             self.main_loop = None
             self.logger.error("Could not get running event loop in reconfigure.")
-
-        # Configure hearken logger to reduce noise from DEBUG logs
-        import logging
-        hearken_logger = logging.getLogger("hearken")
-        hearken_logger.setLevel(logging.INFO)
-        if self.logger.handlers:
-            hearken_logger.handlers = self.logger.handlers
 
         attrs = struct_to_dict(config.attributes)
         self.speech_provider = SpeechProvider[
@@ -1072,8 +926,6 @@ class SpeechIOService(SpeechService, EasyResource):
         self.trigger_active = False
         self.active_trigger_type = ""
         self.stt = None
-        self.microphone = str(attrs.get("microphone_name", ""))
-        self.speaker = str(attrs.get("speaker_name", ""))
 
         # Fuzzy matching configuration
         self.listen_trigger_fuzzy_matching = bool(
@@ -1089,8 +941,8 @@ class SpeechIOService(SpeechService, EasyResource):
         self.listen_sample_rate = int(attrs.get("listen_sample_rate", 48000))
 
         # Stop any existing VAD
-        if self.listen_closer is not None:
-            self.listen_closer(True)
+        if rec_state.listen_closer is not None:
+            rec_state.listen_closer(True)
         self.stop_vosk_vad()
 
         # Validate threshold
@@ -1131,33 +983,13 @@ class SpeechIOService(SpeechService, EasyResource):
             stt = dependencies[SpeechService.get_resource_name(self.stt_provider)]
             self.stt = cast(SpeechService, stt)
 
-        if self.microphone != "":
-            mic = dependencies[AudioIn.get_resource_name(self.microphone)]
-            self.microphone_client = cast(AudioIn, mic)
-        else:
-            self.microphone_client = None
-
-        if self.speaker != "":
-            speaker = dependencies[AudioOut.get_resource_name(self.speaker)]
-            self.speaker_client = cast(AudioOut, speaker)
-        else:
-            self.speaker_client = None
-
-        # Track audio playing state for speaker_client
-        self.is_playing_audio = False
-
-        if not self.disable_audioout and self.speaker_client is None:
+        if not self.disable_audioout:
             if not mixer.get_init():
                 try:
                     mixer.init(buffer=1024)
                 except Exception as err:
-                    try:
-                        # try with pulse server
-                        os.environ["PULSE_SERVER"] = "/run/user/1000/pulse/native"
-                        mixer.init(buffer=1024)
-                    except Exception as e:
-                        self.logger.warning(f"Failed to initialize pygame mixer: {e}")
-                        self.logger.warning("Audio playback via pygame will not be available")
+                    os.environ["PULSE_SERVER"] = "/run/user/1000/pulse/native"
+                    mixer.init(buffer=1024)
         else:
             if mixer.get_init():
                 mixer.quit()
@@ -1165,9 +997,75 @@ class SpeechIOService(SpeechService, EasyResource):
         rec_state.rec = sr.Recognizer()
         rec_state.rec.operation_timeout = self.stt_timeout
 
-        if self.should_listen:
-            self.logger.debug("Setting up background listening")
-            self._setup_background_listening()
+        if not self.disable_mic:
+            # Set up speech recognition
+            rec_state.rec.dynamic_energy_threshold = True
+
+            mics = sr.Microphone.list_microphone_names()
+
+            if self.mic_device_name != "":
+                rec_state.mic = sr.Microphone(
+                    device_index=mics.index(self.mic_device_name),
+                    sample_rate=self.listen_sample_rate,
+                )
+            else:
+                rec_state.mic = sr.Microphone(sample_rate=self.listen_sample_rate)
+
+            with rec_state.mic as source:
+                rec_state.rec.adjust_for_ambient_noise(source, 2)
+
+            # set up background listening if desired
+            if self.should_listen:
+                self.logger.debug("Will listen in background")
+
+                # Try Vosk VAD first if enabled
+                if self.use_vosk_vad and self.start_vosk_vad():
+                    self.logger.debug("Using Vosk VAD for voice activity detection")
+                elif self.use_new_listener:
+                    vad_type = self.vad_config.get("type")
+                    vad_kwargs = self.vad_config.copy()
+                    vad_kwargs.pop("type", None)
+                    vad = None
+
+                    if vad_type == "energy":
+                        vad = EnergyVAD(**vad_kwargs)
+                    elif vad_type == "webrtc":
+                        vad = WebRTCVAD(**vad_kwargs)
+                    elif vad_type == "silero":
+                        vad = SileroVAD(**vad_kwargs)
+
+                    self.logger.debug(
+                        f"Using new listener with vad: {self.vad_config.get('type')}"
+                    )
+                    self.listener = Listener(
+                        source=SpeechRecognitionSource(rec_state.mic),
+                        vad=vad,
+                        on_error=lambda err: self.logger.error(
+                            f"new listener error: {err}"
+                        ),
+                        on_speech=lambda segment: self.listen_callback(
+                            None,
+                            sr.AudioData(
+                                segment.audio_data,
+                                segment.sample_rate,
+                                segment.sample_width,
+                            ),
+                        ),
+                    )
+
+                    def pipeline_closer(wait_for_stop=True):
+                        self.listener.stop()
+
+                    rec_state.listen_closer = pipeline_closer
+                    self.listener.start()
+                else:
+                    # Fall back to speech_recognition VAD
+                    self.logger.debug("Using speech_recognition VAD")
+                    rec_state.listen_closer = rec_state.rec.listen_in_background(
+                        source=rec_state.mic,
+                        phrase_time_limit=self.listen_phrase_time_limit,
+                        callback=self.listen_callback,
+                    )
 
     async def do_command(
         self,
@@ -1183,8 +1081,8 @@ class SpeechIOService(SpeechService, EasyResource):
         return {"status": "unknown command"}
 
     async def close(self):
-        if self.listen_closer is not None:
-            self.listen_closer(True)
+        if rec_state.listen_closer is not None:
+            rec_state.listen_closer(True)
         self.stop_vosk_vad()
 
 

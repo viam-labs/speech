@@ -28,18 +28,12 @@ if [ ! "$(command -v uv)" ]; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
 
-if ! uv venv --allow-existing --python python3.11 $VIRTUAL_ENV; then
-  echo "unable to create required virtual environment with python3.11"
+if ! uv venv --allow-existing $VIRTUAL_ENV; then
+  echo "unable to create required virtual environment"
   exit 1
 fi
 
 source $VIRTUAL_ENV/bin/activate
 
 echo "Virtualenv found/created. Installing/upgrading Python packages..."
-uv pip install --prerelease=allow -r requirements.txt -q
-
-# Install local hearken in editable mode with extras
-if [ -d "/home/viam/hearken" ]; then
-  echo "Installing local hearken..."
-  uv pip install -e /home/viam/hearken[webrtc,silero,sr]
-fi
+uv pip install -r requirements.txt -q

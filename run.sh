@@ -15,4 +15,4 @@ export PA_ALSA_PLUGHW=1
 # Be sure to use `exec` so that termination signals reach the python process,
 # or handle forwarding termination signals manually
 echo "Starting module..."
-exec python -m main $@
+exec uv run python -m main $@
