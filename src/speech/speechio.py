@@ -12,6 +12,7 @@ from typing import (
 )
 from enum import Enum
 from datetime import datetime
+import logging
 import os
 import re
 import asyncio
@@ -99,6 +100,27 @@ class SpeechIOService(SpeechService, EasyResource):
     """
 
     MODEL: ClassVar[Model] = Model.from_string("viam-labs:speech:speechio")
+
+    KNOWN_ATTRIBUTES: ClassVar[frozenset] = frozenset({
+        "speech_provider", "speech_provider_key", "speech_voice",
+        "speech_generation_config",
+        "completion_provider", "completion_model", "completion_provider_org",
+        "completion_provider_key", "completion_persona",
+        "stt_provider", "stt_provider_config",
+        "listen", "listen_phrase_time_limit", "mic_device_name",
+        "listen_trigger_say", "listen_trigger_completion", "listen_trigger_command",
+        "listen_command_buffer_length", "cache_ahead_completions",
+        "disable_mic", "disable_audioout",
+        "use_vosk_vad", "listen_trigger_fuzzy_matching", "listen_trigger_fuzzy_threshold",
+        "save_failed_audio", "use_new_listener", "stt_timeout",
+        "vad_config", "listen_sample_rate",
+    })
+
+    BOOLEAN_ATTRIBUTES: ClassVar[frozenset] = frozenset({
+        "listen", "cache_ahead_completions", "disable_mic", "disable_audioout",
+        "use_vosk_vad", "listen_trigger_fuzzy_matching", "save_failed_audio",
+        "use_new_listener",
+    })
     speech_provider: SpeechProvider
     speech_provider_key: str
     speech_voice: str
@@ -145,8 +167,25 @@ class SpeechIOService(SpeechService, EasyResource):
         Returns:
             Tuple[Sequence[str], Sequence[str]]: A pair of lists of implicit and optional dependencies
         """
+        logger = logging.getLogger(__name__)
         deps = []
         attrs = struct_to_dict(config.attributes)
+
+        unknown = set(attrs.keys()) - cls.KNOWN_ATTRIBUTES
+        if unknown:
+            logger.warning(
+                f"Unknown attribute(s) in speech config (will be ignored): {', '.join(sorted(unknown))}. "
+                f"Check for typos. Known attributes: {', '.join(sorted(cls.KNOWN_ATTRIBUTES))}"
+            )
+
+        for attr_name in cls.BOOLEAN_ATTRIBUTES:
+            val = attrs.get(attr_name)
+            if isinstance(val, str):
+                logger.warning(
+                    f"Attribute '{attr_name}' should be a boolean (true/false), "
+                    f"got string \"{val}\". This may cause unexpected behavior."
+                )
+
         stt_provider = str(attrs.get("stt_provider", ""))
         if stt_provider != "" and "google" not in stt_provider:
             deps.append(stt_provider)
