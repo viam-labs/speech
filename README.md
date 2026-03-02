@@ -134,8 +134,6 @@ The following attributes are available for the `viam-labs:speech:speechio` speec
 | `disable_mic`  | boolean | Optional | If true, will not configure any listening capabilities. This must be set to true if you do not have a valid microphone attached to your system. Default: `false`. |
 | `disable_audioout`  | boolean | Optional | If true, will not configure any audio output capabilities. This must be set to true if you do not have a valid audio output device attached to your system. Default: `false`. |
 | `use_vosk_vad`  | boolean | Optional | If true, will use Vosk for Voice Activity Detection (VAD) instead of the default speech_recognition VAD. The Vosk model will be automatically downloaded (~40MB) on first use. Default: `false`. |
-| `microphone_name` | string | Optional | Name of the viam audioin component to obtain an audio stream from.|
-| `speaker_name` | string | Optional | Name of the vima audioout component to use for audio playback. |
 
 
 ### Example configuration
@@ -152,8 +150,6 @@ The following configuration sets up listening mode with local speech-to-text, us
   "speech_provider": "elevenlabs",
   "speech_provider_key": "keygoeshere",
   "speech_voice": "Antoni",
-  "microphone_name": "mic-1",
-  "speaker_name": "speaker-1"
 }
 ```
 
