@@ -1026,9 +1026,16 @@ class SpeechIOService(SpeechService, EasyResource):
             if not mixer.get_init():
                 try:
                     mixer.init(buffer=1024)
-                except Exception as err:
+                except Exception:
                     os.environ["PULSE_SERVER"] = "/run/user/1000/pulse/native"
-                    mixer.init(buffer=1024)
+                    try:
+                        mixer.init(buffer=1024)
+                    except Exception as err:
+                        self.logger.error(
+                            f"Failed to initialize audio output: {err}. "
+                            "Set 'disable_audioout' to true if this machine has no audio device."
+                        )
+                        raise
         else:
             if mixer.get_init():
                 mixer.quit()
