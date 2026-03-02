@@ -1,5 +1,44 @@
 # `speech` modular service
 
+> [!WARNING]
+> **This module is deprecated and will no longer be maintained.**
+> See the [Migration Guide](#migration-guide) below.
+
+## Migration Guide
+
+This module's functionality is covered by two actively maintained modules:
+
+| Feature | Replacement |
+|---------|-------------|
+| Microphone input & speaker output | [`viam:system-audio:microphone` / `viam:system-audio:speaker`](https://github.com/viam-modules/system-audio) |
+| Wake word detection & audio filtering | [`viam:filtered-audio:wake-word-filter`](https://github.com/viam-modules/filtered-audio) |
+
+### Step 1 — Replace audio hardware components
+
+Use [viam-modules/system-audio](https://github.com/viam-modules/system-audio) for microphone capture and speaker playback. It provides:
+- `viam:system-audio:microphone` — configurable audio capture (device, sample rate, channels)
+- `viam:system-audio:speaker` — audio playback with volume control
+- `viam:system-audio:discovery` — lists available audio devices
+
+
+### Step 2 — Replace wake word / listening
+
+Use [viam-modules/filtered-audio](https://github.com/viam-modules/filtered-audio) for wake word detection. Configure `viam:filtered-audio:wake-word-filter` with:
+
+```json
+{
+  "source_microphone": "<your-microphone-component-name>",
+  "wake_words": ["hey robot", "robot say"],
+}
+```
+
+### Note on TTS and AI completions
+
+TTS, STT, and completion features are not provided by a single replacement module. You should integrate those capabilities directly in your application code. The filtered-audio repo includes working examples:
+
+- [voice_assistant_google.py](https://github.com/viam-modules/filtered-audio/blob/main/examples/voice_assistant_google.py)
+- [voice_assistant_openai.py](https://github.com/viam-modules/filtered-audio/blob/main/examples/voice_assistant_openai.py)
+
 *speech* is a modular service that provides text-to-speech (TTS) and speech-to-text (STT) capabilities for machines running on the Viam platform.
 
 This module implements the [Speech Service API (`viam-labs:service:speech`)](https://github.com/viam-labs/speech-service-api). See the documentation for that API to learn more about using it with the Viam SDKs.

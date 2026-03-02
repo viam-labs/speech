@@ -1006,6 +1006,10 @@ class SpeechIOService(SpeechService, EasyResource):
     def reconfigure(
         self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]
     ):
+        self.logger.warning(
+            "DEPRECATED: The viam-labs:speech:speechio module is deprecated and will be removed. "
+            "See README for migration guide."
+        )
         try:
             self.main_loop = asyncio.get_running_loop()
         except RuntimeError:
