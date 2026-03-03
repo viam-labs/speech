@@ -1,7 +1,7 @@
 # `speech` modular service
 
 > [!WARNING]
-> **This module is deprecated and will no longer be maintained.**
+> **This module is deprecated and will be removed.**
 > See the [Migration Guide](#migration-guide) below.
 
 ## Migration Guide
@@ -32,7 +32,7 @@ Use [viam-modules/filtered-audio](https://github.com/viam-modules/filtered-audio
 }
 ```
 
-### Note on TTS and AI completions
+### SST, TTS and AI completions
 
 TTS, STT, and completion features are not provided by a single replacement module. You should integrate those capabilities directly in your application code. The filtered-audio repo includes working examples:
 
@@ -69,6 +69,10 @@ Before configuring your speech service, you must also [create a machine](https:/
 To use this module, follow these instructions to [add a module from the Viam Registry](https://docs.viam.com/registry/configure/#add-a-modular-resource-from-the-viam-registry) and select the `viam-labs:speech:speechio` model from the [`speech` module](https://app.viam.com/module/viam-labs/speech).
 
 ## Configure your `speech service`
+
+> [!WARNING]
+> **This module is deprecated and will be removed.**
+> See the Migration Guide in README.
 
 Navigate to the **Config** tab of your machine's page in [the Viam app](https://app.viam.com/).
 Click on the **Services** subtab and click **Create service**.
