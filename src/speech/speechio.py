@@ -956,8 +956,18 @@ class SpeechIOService(SpeechService, EasyResource):
             attrs.get("listen_command_buffer_length", 10)
         )
         self.cache_ahead_completions = bool(attrs.get("cache_ahead_completions", False))
-        self.disable_mic = bool(attrs.get("disable_mic", False))
-        self.disable_audioout = bool(attrs.get("disable_audioout", False))
+        raw_disable_mic = attrs.get("disable_mic", False)
+        self.disable_mic = bool(raw_disable_mic)
+        self.logger.info(
+            f"disable_mic: raw={raw_disable_mic!r} (type={type(raw_disable_mic).__name__}), "
+            f"resolved={self.disable_mic}"
+        )
+        raw_disable_audioout = attrs.get("disable_audioout", False)
+        self.disable_audioout = bool(raw_disable_audioout)
+        self.logger.info(
+            f"disable_audioout: raw={raw_disable_audioout!r} (type={type(raw_disable_audioout).__name__}), "
+            f"resolved={self.disable_audioout}"
+        )
         self.use_vosk_vad = bool(
             attrs.get("use_vosk_vad", False)
         )  # New option for Vosk VAD
@@ -1043,6 +1053,7 @@ class SpeechIOService(SpeechService, EasyResource):
         rec_state.rec = sr.Recognizer()
         rec_state.rec.operation_timeout = self.stt_timeout
 
+        self.logger.info(f"Mic setup: disable_mic={self.disable_mic}, skipping={self.disable_mic}")
         if not self.disable_mic:
             # Set up speech recognition
             rec_state.rec.dynamic_energy_threshold = True
@@ -1058,6 +1069,11 @@ class SpeechIOService(SpeechService, EasyResource):
                 rec_state.mic = sr.Microphone(sample_rate=self.listen_sample_rate)
 
             with rec_state.mic as source:
+                if source.stream is None:
+                    raise RuntimeError(
+                        f"Failed to open microphone '{self.mic_device_name or 'default'}'. "
+                        "Check that the device exists and is not in use by another process."
+                    )
                 rec_state.rec.adjust_for_ambient_noise(source, 2)
 
             # set up background listening if desired
