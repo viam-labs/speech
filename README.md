@@ -1,5 +1,44 @@
 # `speech` modular service
 
+> [!WARNING]
+> **This module is deprecated and will be removed.**
+> See the [Migration Guide](#migration-guide) below.
+
+## Migration Guide
+
+This module's functionality is covered by two actively maintained modules:
+
+| Feature | Replacement |
+|---------|-------------|
+| Microphone input & speaker output | [`viam:system-audio:microphone` / `viam:system-audio:speaker`](https://github.com/viam-modules/system-audio) |
+| Wake word detection & audio filtering | [`viam:filtered-audio:wake-word-filter`](https://github.com/viam-modules/filtered-audio) |
+
+### Step 1 — Replace audio hardware components
+
+Use [viam-modules/system-audio](https://github.com/viam-modules/system-audio) for microphone capture and speaker playback. It provides:
+- `viam:system-audio:microphone` — configurable audio capture (device, sample rate, channels)
+- `viam:system-audio:speaker` — audio playback with volume control
+- `viam:system-audio:discovery` — lists available audio devices
+
+
+### Step 2 — Replace wake word / listening
+
+Use [viam-modules/filtered-audio](https://github.com/viam-modules/filtered-audio) for wake word detection. Configure `viam:filtered-audio:wake-word-filter` with:
+
+```json
+{
+  "source_microphone": "<your-microphone-component-name>",
+  "wake_words": ["hey robot", "robot say"],
+}
+```
+
+### SST, TTS and AI completions
+
+TTS, STT, and completion features are not provided by a single replacement module. You should integrate those capabilities directly in your application code. The filtered-audio repo includes working examples:
+
+- [voice_assistant_google.py](https://github.com/viam-modules/filtered-audio/blob/main/examples/voice_assistant_google.py)
+- [voice_assistant_openai.py](https://github.com/viam-modules/filtered-audio/blob/main/examples/voice_assistant_openai.py)
+
 *speech* is a modular service that provides text-to-speech (TTS) and speech-to-text (STT) capabilities for machines running on the Viam platform.
 
 This module implements the [Speech Service API (`viam-labs:service:speech`)](https://github.com/viam-labs/speech-service-api). See the documentation for that API to learn more about using it with the Viam SDKs.
@@ -30,6 +69,10 @@ Before configuring your speech service, you must also [create a machine](https:/
 To use this module, follow these instructions to [add a module from the Viam Registry](https://docs.viam.com/registry/configure/#add-a-modular-resource-from-the-viam-registry) and select the `viam-labs:speech:speechio` model from the [`speech` module](https://app.viam.com/module/viam-labs/speech).
 
 ## Configure your `speech service`
+
+> [!WARNING]
+> **This module is deprecated and will be removed.**
+> See the Migration Guide in README.
 
 Navigate to the **Config** tab of your machine's page in [the Viam app](https://app.viam.com/).
 Click on the **Services** subtab and click **Create service**.
@@ -286,7 +329,7 @@ The following attributes are available for this model:
 }
 ```
 
-# Troubleshooting 
+# Troubleshooting
 ## ALSA Configuration Guide for Speechio Service
 
 ## Overview
@@ -310,7 +353,7 @@ First, identify your audio devices:
 # List playback devices
 aplay -l
 
-# List capture devices  
+# List capture devices
 arecord -l
 
 # Check current card assignments
@@ -420,7 +463,7 @@ cat /etc/asound.conf
 ### Issue: No Audio Detected by Speechio
 **Symptom:** No "speechio heard audio" logs when speaking
 
-**Solution:** 
+**Solution:**
 1. Verify microphone with `arecord -l`
 2. Check ALSA configuration with `arecord -D default -f S16_LE -r 16000 -c 1 -t wav /tmp/test.wav`
 3. Ensure `/etc/asound.conf` uses correct device names
@@ -428,7 +471,7 @@ cat /etc/asound.conf
 ### Issue: Configuration Resets After Reboot
 **Symptom:** Audio setup works until machine restarts
 
-**Solution:** 
+**Solution:**
 1. Use `/etc/asound.conf` (not `~/.asoundrc`)
 2. Verify file is not managed by packages: `dpkg -S /etc/asound.conf`
 3. Check file permissions: `sudo chmod 644 /etc/asound.conf`
