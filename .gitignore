@@ -166,6 +166,7 @@ appimage-build
 *.AppImage*
 viam-env
 .installed
+reload-dist/*
 
 test.py
 example.mp3
